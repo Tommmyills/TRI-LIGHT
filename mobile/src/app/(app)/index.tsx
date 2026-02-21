@@ -330,10 +330,23 @@ export default function ReachScreen() {
   return (
     <View className="flex-1" style={{ backgroundColor: "#0a0a0a" }}>
 
-      {/* Settings icon — top right, barely visible */}
-      <View style={{ position: "absolute", top: 60, right: 24, zIndex: 10 }}>
-        <Pressable onPress={handleOpenSettings} hitSlop={16}>
-          <Settings size={18} color="#2a2a2a" />
+      {/* Settings icon — top right */}
+      <View style={{ position: "absolute", top: 56, right: 20, zIndex: 10 }}>
+        <Pressable
+          onPress={handleOpenSettings}
+          hitSlop={12}
+          style={({ pressed }) => ({
+            width: 34,
+            height: 34,
+            borderRadius: 17,
+            borderWidth: 1,
+            borderColor: "#cc0000",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Settings size={15} color="#cc0000" />
         </Pressable>
       </View>
 
