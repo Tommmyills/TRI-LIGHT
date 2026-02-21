@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -49,6 +50,7 @@ export default function ReachScreen() {
 
   const { data: session } = useSession();
   const invalidateSession = useInvalidateSession();
+  const insets = useSafeAreaInsets();
 
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -331,7 +333,7 @@ export default function ReachScreen() {
     <View className="flex-1" style={{ backgroundColor: "#0a0a0a" }}>
 
       {/* Settings icon — top right */}
-      <View style={{ position: "absolute", top: 56, right: 20, zIndex: 10 }}>
+      <View style={{ position: "absolute", top: insets.top + 12, right: 20, zIndex: 10 }}>
         <Pressable
           onPress={handleOpenSettings}
           hitSlop={12}
