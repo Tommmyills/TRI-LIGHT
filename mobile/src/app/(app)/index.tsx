@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import Animated, {
   withDelay,
   Easing,
   interpolate,
-  runOnJS,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -28,7 +27,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Crypto from "expo-crypto";
 import { api } from "@/lib/api/api";
 import useReachStore from "@/lib/state/reach-store";
-import { Check, LogOut } from "lucide-react-native";
+import { Check, Settings } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useSession, useInvalidateSession } from "@/lib/auth/use-session";
 
@@ -45,31 +44,35 @@ interface Person {
 export default function ReachScreen() {
   const person = useReachStore((s) => s.person);
   const deviceId = useReachStore((s) => s.deviceId);
-  const hasRegistered = useReachStore((s) => s.hasRegistered);
   const setPerson = useReachStore((s) => s.setPerson);
   const setDeviceId = useReachStore((s) => s.setDeviceId);
 
   const { data: session } = useSession();
   const invalidateSession = useInvalidateSession();
 
+  // Modal states
   const [showModal, setShowModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showSentConfirmation, setShowSentConfirmation] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [reaching, setReaching] = useState(false);
 
   // Animations
   const pulseScale = useSharedValue(1);
   const pulseOpacity = useSharedValue(0.4);
   const buttonPressed = useSharedValue(0);
   const modalSlide = useSharedValue(0);
+  const settingsModalSlide = useSharedValue(0);
   const checkScale = useSharedValue(0);
   const checkOpacity = useSharedValue(0);
   const confirmTextOpacity = useSharedValue(0);
   const glowOpacity = useSharedValue(0);
   const outerPulseScale = useSharedValue(1);
   const outerPulseOpacity = useSharedValue(0);
+  const sentOpacity = useSharedValue(0);
 
   // Generate device ID on mount
   useEffect(() => {
@@ -83,16 +86,16 @@ export default function ReachScreen() {
     init();
   }, [deviceId, setDeviceId]);
 
-  // Load person for logged-in user
+  // Load person for logged-in user (syncs server state into local store)
   useEffect(() => {
     async function loadPersonForUser() {
-      if (session?.user && !hasRegistered) {
+      if (session?.user) {
         try {
           const savedPerson = await api.get<Person | null>("/api/person/for-user");
           if (savedPerson) {
             setPerson(savedPerson);
           }
-        } catch (err) {
+        } catch {
           // ignore
         }
       }
@@ -124,7 +127,6 @@ export default function ReachScreen() {
       false
     );
 
-    // Outer ring pulse
     outerPulseScale.value = withRepeat(
       withSequence(
         withTiming(1.0, { duration: 0 }),
@@ -143,7 +145,7 @@ export default function ReachScreen() {
       -1,
       false
     );
-  }, [pulseScale, pulseOpacity, outerPulseScale, outerPulseOpacity]);
+  }, []);
 
   const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -162,12 +164,13 @@ export default function ReachScreen() {
   }));
 
   const modalAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateY: interpolate(modalSlide.value, [0, 1], [600, 0]),
-      },
-    ],
+    transform: [{ translateY: interpolate(modalSlide.value, [0, 1], [600, 0]) }],
     opacity: modalSlide.value,
+  }));
+
+  const settingsModalAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(settingsModalSlide.value, [0, 1], [600, 0]) }],
+    opacity: settingsModalSlide.value,
   }));
 
   const checkAnimatedStyle = useAnimatedStyle(() => ({
@@ -179,50 +182,96 @@ export default function ReachScreen() {
     opacity: confirmTextOpacity.value,
   }));
 
-  const handleSignOut = useCallback(() => {
-    Alert.alert("Sign Out", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await authClient.signOut();
-          await invalidateSession();
-          useReachStore.getState().reset();
-        },
-      },
-    ]);
-  }, [invalidateSession]);
+  const sentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: sentOpacity.value,
+    transform: [{ translateY: interpolate(sentOpacity.value, [0, 1], [10, 0]) }],
+  }));
 
+  // Settings modal
+  const handleOpenSettings = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowSettingsModal(true);
+    settingsModalSlide.value = withSpring(1, { damping: 22, stiffness: 200 });
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    settingsModalSlide.value = withTiming(0, { duration: 250 });
+    setTimeout(() => setShowSettingsModal(false), 260);
+  }, []);
+
+  const handleChangeMyPerson = useCallback(() => {
+    handleCloseSettings();
+    setTimeout(() => {
+      setName(person?.name ?? "");
+      setPhone(person?.phone ?? "");
+      setShowModal(true);
+      modalSlide.value = withSpring(1, { damping: 20, stiffness: 200 });
+    }, 300);
+  }, [person, handleCloseSettings]);
+
+  const handleSignOut = useCallback(() => {
+    handleCloseSettings();
+    setTimeout(() => {
+      Alert.alert("Sign Out", "Are you sure?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Sign Out",
+          style: "destructive",
+          onPress: async () => {
+            await authClient.signOut();
+            await invalidateSession();
+            useReachStore.getState().reset();
+          },
+        },
+      ]);
+    }, 300);
+  }, [invalidateSession, handleCloseSettings]);
+
+  // REACH button press
   const handleButtonPress = useCallback(async () => {
+    if (reaching) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     buttonPressed.value = withSequence(
       withTiming(1, { duration: 100 }),
       withTiming(0, { duration: 200 })
     );
 
-    if (!hasRegistered) {
-      // First press - show registration
+    if (!person) {
+      // No person saved — open registration modal
       setTimeout(() => {
+        setName("");
+        setPhone("");
         setShowModal(true);
         modalSlide.value = withSpring(1, { damping: 20, stiffness: 200 });
       }, 300);
-    } else if (person) {
-      // Already registered - trigger reach
+    } else {
+      // Person saved — fire the reach
+      setReaching(true);
       glowOpacity.value = withSequence(
         withTiming(1, { duration: 200 }),
-        withTiming(0, { duration: 800 })
+        withTiming(0, { duration: 1000 })
       );
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
       try {
         await api.post("/api/reach", {});
+        // Show sent confirmation with fade in
         setShowSentConfirmation(true);
-        setTimeout(() => setShowSentConfirmation(false), 3000);
-      } catch (err) {
+        sentOpacity.value = withTiming(1, { duration: 300 });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        // Fade out after 3 seconds
+        setTimeout(() => {
+          sentOpacity.value = withTiming(0, { duration: 400 });
+          setTimeout(() => setShowSentConfirmation(false), 420);
+        }, 3000);
+      } catch {
         Alert.alert("Error", "Could not reach. Please try again.");
+      } finally {
+        setReaching(false);
       }
     }
-  }, [hasRegistered, person, buttonPressed, modalSlide, glowOpacity, invalidateSession]);
+  }, [person, reaching, buttonPressed, modalSlide, glowOpacity, sentOpacity]);
 
   const handleSavePerson = useCallback(async () => {
     if (!name.trim() || !phone.trim()) {
@@ -245,34 +294,28 @@ export default function ReachScreen() {
         setPerson(savedPerson);
       }
 
-      // Close modal
       modalSlide.value = withTiming(0, { duration: 300 });
       setTimeout(() => {
         setShowModal(false);
         setShowConfirmation(true);
 
-        // Animate checkmark
         checkScale.value = withSequence(
           withTiming(0, { duration: 0 }),
           withSpring(1.2, { damping: 8, stiffness: 200 }),
           withSpring(1, { damping: 12 })
         );
         checkOpacity.value = withTiming(1, { duration: 300 });
-        confirmTextOpacity.value = withDelay(
-          400,
-          withTiming(1, { duration: 500 })
-        );
+        confirmTextOpacity.value = withDelay(400, withTiming(1, { duration: 500 }));
 
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        // Auto-dismiss after 4 seconds
         setTimeout(() => {
           confirmTextOpacity.value = withTiming(0, { duration: 300 });
           checkOpacity.value = withTiming(0, { duration: 300 });
           setTimeout(() => setShowConfirmation(false), 400);
         }, 4000);
       }, 350);
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "Could not save. Please try again.");
     } finally {
       setSaving(false);
@@ -286,14 +329,15 @@ export default function ReachScreen() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#0a0a0a" }}>
-      {/* Sign out button */}
+
+      {/* Settings icon — top right, barely visible */}
       <View style={{ position: "absolute", top: 60, right: 24, zIndex: 10 }}>
-        <Pressable onPress={handleSignOut} hitSlop={12} testID="sign-out-button">
-          <LogOut size={20} color="#2a2a2a" />
+        <Pressable onPress={handleOpenSettings} hitSlop={16}>
+          <Settings size={18} color="#2a2a2a" />
         </Pressable>
       </View>
 
-      {/* Main content - centered button */}
+      {/* Main content */}
       <View className="flex-1 items-center justify-center">
         {/* Outer pulse ring */}
         <Animated.View
@@ -310,7 +354,7 @@ export default function ReachScreen() {
           ]}
         />
 
-        {/* Ambient glow behind button */}
+        {/* Ambient glow */}
         <Animated.View
           style={[
             glowAnimatedStyle,
@@ -333,7 +377,7 @@ export default function ReachScreen() {
         </Animated.View>
 
         {/* The 3D Button */}
-        <Pressable onPress={handleButtonPress} testID="reach-button">
+        <Pressable onPress={handleButtonPress} disabled={reaching}>
           <Animated.View
             style={[
               buttonAnimatedStyle,
@@ -341,10 +385,11 @@ export default function ReachScreen() {
                 width: BUTTON_SIZE,
                 height: BUTTON_SIZE,
                 borderRadius: BUTTON_SIZE / 2,
+                opacity: reaching ? 0.75 : 1,
               },
             ]}
           >
-            {/* Button shadow layer */}
+            {/* Shadow layer */}
             <View
               style={{
                 position: "absolute",
@@ -361,7 +406,7 @@ export default function ReachScreen() {
               }}
             />
 
-            {/* Button base - dark red */}
+            {/* Button face */}
             <View
               style={{
                 width: BUTTON_SIZE,
@@ -419,7 +464,7 @@ export default function ReachScreen() {
           </Animated.View>
         </Pressable>
 
-        {/* REACH text below button */}
+        {/* REACH text */}
         <Text
           style={{
             marginTop: 40,
@@ -433,7 +478,7 @@ export default function ReachScreen() {
         </Text>
       </View>
 
-      {/* Registration Modal */}
+      {/* Registration / Edit Person Modal */}
       <Modal
         visible={showModal}
         transparent
@@ -463,52 +508,19 @@ export default function ReachScreen() {
               },
             ]}
           >
-            {/* Drag handle */}
             <View className="items-center mb-6">
-              <View
-                style={{
-                  width: 40,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: "#333",
-                }}
-              />
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#333" }} />
             </View>
 
-            <Text
-              style={{
-                fontSize: 28,
-                fontWeight: "800",
-                color: "#ffffff",
-                marginBottom: 8,
-              }}
-            >
-              Who's your person?
+            <Text style={{ fontSize: 28, fontWeight: "800", color: "#ffffff", marginBottom: 8 }}>
+              {person ? "Change my person" : "Who's your person?"}
+            </Text>
+            <Text style={{ fontSize: 16, color: "#666666", marginBottom: 32, lineHeight: 22 }}>
+              {person ? "Update the name or number." : "The one who picks up."}
             </Text>
 
-            <Text
-              style={{
-                fontSize: 16,
-                color: "#666666",
-                marginBottom: 32,
-                lineHeight: 22,
-              }}
-            >
-              The one who picks up.
-            </Text>
-
-            {/* Name input */}
             <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: "#555",
-                  marginBottom: 8,
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                }}
-              >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
                 Name
               </Text>
               <TextInput
@@ -517,32 +529,12 @@ export default function ReachScreen() {
                 placeholder="Their name"
                 placeholderTextColor="#444"
                 autoCapitalize="words"
-                testID="person-name-input"
-                style={{
-                  backgroundColor: "#1a1a1a",
-                  borderRadius: 14,
-                  paddingHorizontal: 18,
-                  paddingVertical: 16,
-                  fontSize: 17,
-                  color: "#fff",
-                  borderWidth: 1,
-                  borderColor: "#222",
-                }}
+                style={{ backgroundColor: "#1a1a1a", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, fontSize: 17, color: "#fff", borderWidth: 1, borderColor: "#222" }}
               />
             </View>
 
-            {/* Phone input */}
             <View style={{ marginBottom: 32 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: "#555",
-                  marginBottom: 8,
-                  textTransform: "uppercase",
-                  letterSpacing: 1,
-                }}
-              >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
                 Phone Number
               </Text>
               <TextInput
@@ -551,45 +543,20 @@ export default function ReachScreen() {
                 placeholder="(555) 000-0000"
                 placeholderTextColor="#444"
                 keyboardType="phone-pad"
-                testID="person-phone-input"
-                style={{
-                  backgroundColor: "#1a1a1a",
-                  borderRadius: 14,
-                  paddingHorizontal: 18,
-                  paddingVertical: 16,
-                  fontSize: 17,
-                  color: "#fff",
-                  borderWidth: 1,
-                  borderColor: "#222",
-                }}
+                style={{ backgroundColor: "#1a1a1a", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, fontSize: 17, color: "#fff", borderWidth: 1, borderColor: "#222" }}
               />
             </View>
 
-            {/* Save button */}
             <Pressable
               onPress={handleSavePerson}
               disabled={saving}
-              testID="save-person-button"
-              style={({ pressed }) => ({
-                opacity: pressed ? 0.85 : saving ? 0.5 : 1,
-              })}
+              style={({ pressed }) => ({ opacity: pressed ? 0.85 : saving ? 0.5 : 1 })}
             >
               <LinearGradient
                 colors={["#ee1111", "#cc0000", "#aa0000"]}
-                style={{
-                  borderRadius: 16,
-                  paddingVertical: 18,
-                  alignItems: "center",
-                }}
+                style={{ borderRadius: 16, paddingVertical: 18, alignItems: "center" }}
               >
-                <Text
-                  style={{
-                    fontSize: 17,
-                    fontWeight: "800",
-                    color: "#fff",
-                    letterSpacing: 0.5,
-                  }}
-                >
+                <Text style={{ fontSize: 17, fontWeight: "800", color: "#fff", letterSpacing: 0.5 }}>
                   {saving ? "SAVING..." : "SAVE MY PERSON"}
                 </Text>
               </LinearGradient>
@@ -598,33 +565,107 @@ export default function ReachScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Confirmation Overlay */}
+      {/* Settings Modal */}
+      <Modal
+        visible={showSettingsModal}
+        transparent
+        animationType="none"
+        onRequestClose={handleCloseSettings}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)" }}
+          onPress={handleCloseSettings}
+        />
+        <Animated.View
+          style={[
+            settingsModalAnimatedStyle,
+            {
+              backgroundColor: "#111111",
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 24,
+              paddingTop: 28,
+              paddingBottom: Platform.OS === "ios" ? 48 : 28,
+            },
+          ]}
+        >
+          {/* Handle */}
+          <View style={{ alignItems: "center", marginBottom: 28 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#282828" }} />
+          </View>
+
+          {/* Change My Person */}
+          <Pressable
+            onPress={handleChangeMyPerson}
+            style={({ pressed }) => ({
+              paddingVertical: 18,
+              paddingHorizontal: 4,
+              borderBottomWidth: 1,
+              borderBottomColor: "#1a1a1a",
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "600", color: "#ffffff" }}>
+              Change My Person
+            </Text>
+            {person ? (
+              <Text style={{ fontSize: 14, color: "#444", marginTop: 3 }}>
+                Currently: {person.name}
+              </Text>
+            ) : null}
+          </Pressable>
+
+          {/* Sign Out */}
+          <Pressable
+            onPress={handleSignOut}
+            style={({ pressed }) => ({
+              paddingVertical: 18,
+              paddingHorizontal: 4,
+              borderBottomWidth: 1,
+              borderBottomColor: "#1a1a1a",
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "600", color: "#cc0000" }}>
+              Sign Out
+            </Text>
+          </Pressable>
+
+          {/* Close */}
+          <Pressable
+            onPress={handleCloseSettings}
+            style={({ pressed }) => ({
+              paddingVertical: 18,
+              paddingHorizontal: 4,
+              opacity: pressed ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "600", color: "#555" }}>
+              Close
+            </Text>
+          </Pressable>
+        </Animated.View>
+      </Modal>
+
+      {/* Person-saved Confirmation Overlay */}
       {showConfirmation ? (
         <View
           style={{
             position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: "#0a0a0a",
             alignItems: "center",
             justifyContent: "center",
             paddingHorizontal: 36,
           }}
         >
-          {/* Checkmark circle */}
           <Animated.View
             style={[
               checkAnimatedStyle,
               {
-                width: 90,
-                height: 90,
-                borderRadius: 45,
-                borderWidth: 3,
-                borderColor: "#cc0000",
-                alignItems: "center",
-                justifyContent: "center",
+                width: 90, height: 90, borderRadius: 45,
+                borderWidth: 3, borderColor: "#cc0000",
+                alignItems: "center", justifyContent: "center",
                 marginBottom: 36,
               },
             ]}
@@ -632,60 +673,46 @@ export default function ReachScreen() {
             <Check size={44} color="#cc0000" strokeWidth={3} />
           </Animated.View>
 
-          {/* Confirmation text */}
           <Animated.View style={confirmTextAnimatedStyle}>
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: "700",
-                color: "#ffffff",
-                textAlign: "center",
-                lineHeight: 32,
-              }}
-            >
+            <Text style={{ fontSize: 22, fontWeight: "700", color: "#ffffff", textAlign: "center", lineHeight: 32 }}>
               When you{" "}
               <Text style={{ color: "#cc0000", fontWeight: "900" }}>REACH</Text>
               ,{"\n"}
-              {person?.name ? person.name : name} gets a call,{"\n"}text, and video request.
+              {person?.name ?? name} gets a text{"\n"}and video request.
             </Text>
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: "#cc0000",
-                textAlign: "center",
-                marginTop: 16,
-              }}
-            >
+            <Text style={{ fontSize: 18, fontWeight: "800", color: "#cc0000", textAlign: "center", marginTop: 16 }}>
               Instantly.
             </Text>
           </Animated.View>
         </View>
       ) : null}
 
-      {/* Sent Confirmation */}
+      {/* Sent Confirmation — fades in, auto-fades out after 3s */}
       {showSentConfirmation ? (
-        <View
-          style={{
-            position: "absolute",
-            bottom: 60,
-            left: 24,
-            right: 24,
-            backgroundColor: "#111",
-            borderRadius: 16,
-            padding: 20,
-            borderWidth: 1,
-            borderColor: "#cc0000",
-            alignItems: "center",
-          }}
+        <Animated.View
+          style={[
+            sentAnimatedStyle,
+            {
+              position: "absolute",
+              bottom: 56,
+              left: 24,
+              right: 24,
+              backgroundColor: "#111",
+              borderRadius: 18,
+              padding: 22,
+              borderWidth: 1,
+              borderColor: "#cc0000",
+              alignItems: "center",
+            },
+          ]}
         >
-          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "700" }}>
+          <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700" }}>
             Reaching <Text style={{ color: "#cc0000" }}>{person?.name}</Text>
           </Text>
-          <Text style={{ color: "#555", fontSize: 13, marginTop: 4 }}>
+          <Text style={{ color: "#444", fontSize: 13, marginTop: 5 }}>
             SMS + video call sent
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );

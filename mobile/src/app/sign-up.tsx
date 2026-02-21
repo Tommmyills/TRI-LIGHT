@@ -68,7 +68,7 @@ export default function SignUpScreen() {
                 fontSize: 48,
                 fontWeight: "900",
                 letterSpacing: 14,
-                color: "#1a1a1a",
+                color: "#ffffff",
                 marginBottom: 4,
               }}
             >
