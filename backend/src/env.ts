@@ -1,21 +1,17 @@
 import { z } from "zod";
 
-/**
- * Environment variable schema using Zod
- * This ensures all required environment variables are present and valid
- */
 const envSchema = z.object({
-  // Server Configuration
   PORT: z.string().optional().default("3000"),
   NODE_ENV: z.string().optional(),
-
-  // Database
   DATABASE_URL: z.string(),
+  BACKEND_URL: z.string().default("http://localhost:3000"),
+  BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required"),
+  TWILIO_ACCOUNT_SID: z.string().optional().default(""),
+  TWILIO_AUTH_TOKEN: z.string().optional().default(""),
+  TWILIO_PHONE_NUMBER: z.string().optional().default(""),
+  DAILY_API_KEY: z.string().optional().default(""),
 });
 
-/**
- * Validate and parse environment variables
- */
 function validateEnv() {
   try {
     const parsed = envSchema.parse(process.env);
@@ -27,30 +23,17 @@ function validateEnv() {
       error.issues.forEach((err: any) => {
         console.error(`  - ${err.path.join(".")}: ${err.message}`);
       });
-      console.error("\nPlease check your .env file and ensure all required variables are set.");
       process.exit(1);
     }
     throw error;
   }
 }
 
-/**
- * Validated and typed environment variables
- */
 export const env = validateEnv();
-
-/**
- * Type of the validated environment variables
- */
 export type Env = z.infer<typeof envSchema>;
 
-/**
- * Extend process.env with our environment variables
- */
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
-    // eslint-disable-next-line import/namespace
     interface ProcessEnv extends z.infer<typeof envSchema> {}
   }
 }
