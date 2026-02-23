@@ -11,6 +11,7 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import * as Contacts from "expo-contacts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -265,7 +266,10 @@ export default function ReachScreen() {
       );
 
       try {
-        await api.post("/api/reach", {});
+        const result = await api.post<{ smsSent: boolean; videoRoomUrl: string; person: Person }>("/api/reach", {});
+        if (result?.videoRoomUrl) {
+          Linking.openURL(result.videoRoomUrl);
+        }
         // Show sent confirmation with fade in
         setShowSentConfirmation(true);
         sentOpacity.value = withTiming(1, { duration: 300 });
