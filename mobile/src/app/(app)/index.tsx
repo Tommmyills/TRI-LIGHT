@@ -9,7 +9,10 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
+import * as Contacts from "expo-contacts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   useSharedValue,
@@ -61,6 +64,12 @@ export default function ReachScreen() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [reaching, setReaching] = useState(false);
+
+  // Contact picker states
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [loadingContacts, setLoadingContacts] = useState(false);
 
   // Animations
   const pulseScale = useSharedValue(1);
@@ -329,6 +338,43 @@ export default function ReachScreen() {
     setTimeout(() => setShowModal(false), 300);
   }, [modalSlide]);
 
+  const handleChooseFromContacts = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permission Needed",
+        "Please allow access to your contacts in Settings to use this feature."
+      );
+      return;
+    }
+    setLoadingContacts(true);
+    setContactSearch("");
+    setShowContactPicker(true);
+    try {
+      const result = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      setContacts(result.data);
+    } catch {
+      Alert.alert("Error", "Could not load contacts. Please try again.");
+      setShowContactPicker(false);
+    } finally {
+      setLoadingContacts(false);
+    }
+  }, []);
+
+  const handleSelectContact = useCallback((contact: Contacts.Contact) => {
+    const contactName = contact.name ?? [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+    const contactPhone = contact.phoneNumbers?.[0]?.number ?? "";
+    setName(contactName);
+    setPhone(contactPhone);
+    setShowContactPicker(false);
+    setContactSearch("");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, []);
+
   return (
     <View className="flex-1" style={{ backgroundColor: "#0a0a0a" }}>
 
@@ -530,9 +576,31 @@ export default function ReachScreen() {
             <Text style={{ fontSize: 28, fontWeight: "800", color: "#ffffff", marginBottom: 8 }}>
               {person ? "Change my person" : "Who's your person?"}
             </Text>
-            <Text style={{ fontSize: 16, color: "#666666", marginBottom: 32, lineHeight: 22 }}>
+            <Text style={{ fontSize: 16, color: "#666666", marginBottom: 20, lineHeight: 22 }}>
               {person ? "Update the name or number." : "The one who picks up."}
             </Text>
+
+            {/* Choose from Contacts */}
+            <Pressable
+              onPress={handleChooseFromContacts}
+              testID="choose-from-contacts-button"
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: pressed ? "#1e1e1e" : "#161616",
+                borderRadius: 12,
+                paddingVertical: 13,
+                marginBottom: 24,
+                borderWidth: 1,
+                borderColor: "#2a2a2a",
+                gap: 8,
+              })}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: "#cc0000", letterSpacing: 0.3 }}>
+                Choose from Contacts
+              </Text>
+            </Pressable>
 
             <View style={{ marginBottom: 16 }}>
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
@@ -729,6 +797,119 @@ export default function ReachScreen() {
           </Text>
         </Animated.View>
       ) : null}
+
+      {/* Contact Picker Modal */}
+      <Modal
+        visible={showContactPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowContactPicker(false);
+          setContactSearch("");
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)" }}>
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => {
+              setShowContactPicker(false);
+              setContactSearch("");
+            }}
+          />
+          <View
+            style={{
+              backgroundColor: "#111111",
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingTop: 20,
+              paddingBottom: Platform.OS === "ios" ? 50 : 28,
+              maxHeight: "80%",
+            }}
+          >
+            {/* Handle */}
+            <View style={{ alignItems: "center", marginBottom: 16 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#333" }} />
+            </View>
+
+            <Text style={{ fontSize: 20, fontWeight: "800", color: "#ffffff", paddingHorizontal: 24, marginBottom: 16 }}>
+              Choose a Contact
+            </Text>
+
+            {/* Search input */}
+            <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+              <TextInput
+                value={contactSearch}
+                onChangeText={setContactSearch}
+                placeholder="Search contacts..."
+                placeholderTextColor="#444"
+                autoFocus
+                autoCapitalize="none"
+                testID="contact-search-input"
+                style={{
+                  backgroundColor: "#1a1a1a",
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 16,
+                  color: "#fff",
+                  borderWidth: 1,
+                  borderColor: "#222",
+                }}
+              />
+            </View>
+
+            {loadingContacts ? (
+              <View style={{ paddingVertical: 48, alignItems: "center" }}>
+                <ActivityIndicator color="#cc0000" size="large" />
+                <Text style={{ color: "#555", marginTop: 12, fontSize: 14 }}>Loading contacts...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={contacts.filter((c) => {
+                  const query = contactSearch.toLowerCase();
+                  if (!query) return true;
+                  const fullName = (c.name ?? "").toLowerCase();
+                  return fullName.includes(query);
+                })}
+                keyExtractor={(item) => item.id ?? item.name ?? Math.random().toString()}
+                keyboardShouldPersistTaps="handled"
+                style={{ flexGrow: 0 }}
+                contentContainerStyle={{ paddingHorizontal: 20 }}
+                ItemSeparatorComponent={() => (
+                  <View style={{ height: 1, backgroundColor: "#1a1a1a" }} />
+                )}
+                ListEmptyComponent={() => (
+                  <View style={{ paddingVertical: 32, alignItems: "center" }}>
+                    <Text style={{ color: "#444", fontSize: 15 }}>No contacts found</Text>
+                  </View>
+                )}
+                renderItem={({ item }) => {
+                  const phoneNum = item.phoneNumbers?.[0]?.number ?? null;
+                  if (!phoneNum) return null;
+                  return (
+                    <Pressable
+                      onPress={() => handleSelectContact(item)}
+                      testID={`contact-item-${item.id}`}
+                      style={({ pressed }) => ({
+                        paddingVertical: 14,
+                        paddingHorizontal: 4,
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                    >
+                      <Text style={{ fontSize: 16, fontWeight: "600", color: "#ffffff" }}>
+                        {item.name}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: "#555", marginTop: 2 }}>
+                        {phoneNum}
+                      </Text>
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
