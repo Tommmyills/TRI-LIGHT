@@ -72,7 +72,7 @@ reachRouter.post("/", async (c) => {
     try {
       const client = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
 
-      let messageBody = `Hey, ${person.name} is reaching out.`;
+      let messageBody = `Hey, ${user.name} is reaching out.`;
       if (videoRoomUrl) {
         messageBody += `\n${videoRoomUrl}`;
       }
