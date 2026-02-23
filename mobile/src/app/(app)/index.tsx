@@ -489,7 +489,7 @@ export default function ReachScreen() {
             color: "#1a1a1a",
           }}
         >
-          REACH
+          R.E.A.C.H.
         </Text>
       </View>
 
