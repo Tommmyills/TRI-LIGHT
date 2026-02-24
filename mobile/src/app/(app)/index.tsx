@@ -266,7 +266,7 @@ export default function ReachScreen() {
       );
 
       try {
-        const result = await api.post<{ smsSent: boolean; videoRoomUrl: string; person: Person }>("/api/reach", {});
+        const result = await api.post<{ videoRoomUrl: string }>("/api/reach", {});
         if (result?.videoRoomUrl) {
           Linking.openURL(result.videoRoomUrl);
         }
@@ -765,7 +765,7 @@ export default function ReachScreen() {
               When you{" "}
               <Text style={{ color: "#cc0000", fontWeight: "900" }}>REACH</Text>
               ,{"\n"}
-              {person?.name ?? name} gets a text{"\n"}and video request.
+              {person?.name ?? name} gets a video{"\n"}call request.
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "800", color: "#cc0000", textAlign: "center", marginTop: 16 }}>
               Instantly.
@@ -797,7 +797,7 @@ export default function ReachScreen() {
             Reaching <Text style={{ color: "#cc0000" }}>{person?.name}</Text>
           </Text>
           <Text style={{ color: "#444", fontSize: 13, marginTop: 5 }}>
-            SMS + video call sent
+            Video call started
           </Text>
         </Animated.View>
       ) : null}
