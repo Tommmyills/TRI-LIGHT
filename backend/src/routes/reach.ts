@@ -58,6 +58,7 @@ reachRouter.post("/", async (c) => {
 
   // Send Twilio SMS
   let smsSent = false;
+  console.log("Twilio check - SID:", !!env.TWILIO_ACCOUNT_SID, "Token:", !!env.TWILIO_AUTH_TOKEN, "MsgSid:", !!env.TWILIO_MESSAGING_SERVICE_SID, "Phone:", !!person.phone);
   if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID && person.phone) {
     try {
       const smsBody = videoRoomUrl
@@ -83,9 +84,10 @@ reachRouter.post("/", async (c) => {
 
       if (twilioRes.ok) {
         smsSent = true;
+        console.log("Twilio SMS sent successfully to:", person.phone);
       } else {
         const errData = await twilioRes.text();
-        console.error("Twilio SMS error:", twilioRes.status, errData);
+        console.error("Twilio SMS FAILED:", twilioRes.status, errData);
       }
     } catch (err) {
       console.error("Twilio SMS error:", err);
