@@ -9,6 +9,7 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional().default(""),
   TWILIO_AUTH_TOKEN: z.string().optional().default(""),
   TWILIO_PHONE_NUMBER: z.string().optional().default(""),
+  TWILIO_MESSAGING_SERVICE_SID: z.string().optional().default(""),
   DAILY_API_KEY: z.string().optional().default(""),
 });
 

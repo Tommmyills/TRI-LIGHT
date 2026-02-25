@@ -56,9 +56,46 @@ reachRouter.post("/", async (c) => {
     }
   }
 
+  // Send Twilio SMS
+  let smsSent = false;
+  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID && person.phone) {
+    try {
+      const smsBody = videoRoomUrl
+        ? `${user.name} is reaching out - join the video call: ${videoRoomUrl}`
+        : `${user.name} is reaching out and wants to connect.`;
+
+      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+      const credentials = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString("base64");
+
+      const formData = new URLSearchParams();
+      formData.append("To", person.phone);
+      formData.append("MessagingServiceSid", env.TWILIO_MESSAGING_SERVICE_SID);
+      formData.append("Body", smsBody);
+
+      const twilioRes = await fetch(twilioUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${credentials}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData.toString(),
+      });
+
+      if (twilioRes.ok) {
+        smsSent = true;
+      } else {
+        const errData = await twilioRes.text();
+        console.error("Twilio SMS error:", twilioRes.status, errData);
+      }
+    } catch (err) {
+      console.error("Twilio SMS error:", err);
+    }
+  }
+
   return c.json({
     data: {
       videoRoomUrl,
+      smsSent,
     },
   });
 });
