@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,16 +10,104 @@ import {
   ScrollView,
 } from "react-native";
 import { router } from "expo-router";
-import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
+
+// Animated background blob
+function GlowOrb({
+  color,
+  size,
+  initialX,
+  initialY,
+  duration,
+  delay,
+}: {
+  color: string;
+  size: number;
+  initialX: number;
+  initialY: number;
+  duration: number;
+  delay: number;
+}) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    translateX.value = withRepeat(
+      withSequence(
+        withTiming(30, { duration, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-20, { duration: duration * 0.8, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: duration * 0.6, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(-25, { duration: duration * 1.1, easing: Easing.inOut(Easing.sin) }),
+        withTiming(20, { duration: duration * 0.9, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: duration * 0.7, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          left: initialX,
+          top: initialY,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+          opacity: 0.08,
+        },
+        animStyle,
+      ]}
+    />
+  );
+}
 
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const invalidateSession = useInvalidateSession();
+
+  // Title letter fade-in
+  const titleOpacity = useSharedValue(0);
+  const titleTranslateY = useSharedValue(12);
+
+  useEffect(() => {
+    titleOpacity.value = withTiming(1, { duration: 900, easing: Easing.out(Easing.cubic) });
+    titleTranslateY.value = withTiming(0, { duration: 900, easing: Easing.out(Easing.cubic) });
+  }, []);
+
+  const titleAnimStyle = useAnimatedStyle(() => ({
+    opacity: titleOpacity.value,
+    transform: [{ translateY: titleTranslateY.value }],
+  }));
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
@@ -47,106 +135,143 @@ export default function SignInScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "#0a0a0a" }}>
+      {/* Animated background orbs */}
+      <GlowOrb color="#cc0000" size={340} initialX={-80} initialY={60} duration={7000} delay={0} />
+      <GlowOrb color="#ffc800" size={300} initialX={120} initialY={280} duration={9000} delay={1500} />
+      <GlowOrb color="#00b450" size={320} initialX={-40} initialY={500} duration={8000} delay={800} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 28 }}
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 28,
+          }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo/Title */}
-          <View style={{ marginBottom: 52, alignItems: "center" }}>
+          {/* Title */}
+          <Animated.View style={[{ marginBottom: 56, alignItems: "center" }, titleAnimStyle]}>
             <Text
               style={{
-                fontSize: 48,
+                fontSize: 46,
                 fontWeight: "900",
-                letterSpacing: 14,
+                letterSpacing: 16,
                 color: "#ffffff",
-                marginBottom: 4,
+                marginBottom: 10,
+                textShadowColor: "rgba(204,0,0,0.5)",
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 18,
               }}
             >
-              REACH
+              TRI-LIGHT
             </Text>
+            {/* Red accent line */}
             <View
               style={{
-                width: 40,
+                width: 48,
                 height: 2,
                 backgroundColor: "#cc0000",
                 borderRadius: 1,
+                shadowColor: "#cc0000",
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.9,
+                shadowRadius: 8,
               }}
             />
-          </View>
+          </Animated.View>
 
-          {/* Email */}
+          {/* EMAIL input */}
           <View style={{ marginBottom: 16 }}>
             <Text
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: "700",
-                color: "#444",
+                color: "#cc0000",
                 marginBottom: 8,
                 textTransform: "uppercase",
-                letterSpacing: 1.5,
+                letterSpacing: 2,
               }}
             >
-              Email
+              EMAIL
             </Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#333"
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-              testID="email-input"
-              style={{
-                backgroundColor: "#111",
-                borderRadius: 14,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
-                fontSize: 16,
-                color: "#fff",
-                borderWidth: 1,
-                borderColor: "#1e1e1e",
-              }}
-            />
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              <BlurView intensity={40} tint="dark" style={{ padding: 4 }}>
+                <View
+                  style={{
+                    backgroundColor: "rgba(204, 0, 0, 0.12)",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "rgba(204, 0, 0, 0.35)",
+                    padding: 2,
+                  }}
+                >
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="you@example.com"
+                    placeholderTextColor="rgba(204,0,0,0.35)"
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    testID="email-input"
+                    style={{
+                      paddingHorizontal: 18,
+                      paddingVertical: 16,
+                      color: "#fff",
+                      fontSize: 16,
+                    }}
+                  />
+                </View>
+              </BlurView>
+            </View>
           </View>
 
-          {/* Password */}
+          {/* PASSWORD input */}
           <View style={{ marginBottom: 12 }}>
             <Text
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: "700",
-                color: "#444",
+                color: "#ffc800",
                 marginBottom: 8,
                 textTransform: "uppercase",
-                letterSpacing: 1.5,
+                letterSpacing: 2,
               }}
             >
-              Password
+              PASSWORD
             </Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor="#333"
-              secureTextEntry
-              autoComplete="password"
-              testID="password-input"
-              style={{
-                backgroundColor: "#111",
-                borderRadius: 14,
-                paddingHorizontal: 18,
-                paddingVertical: 16,
-                fontSize: 16,
-                color: "#fff",
-                borderWidth: 1,
-                borderColor: "#1e1e1e",
-              }}
-            />
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              <BlurView intensity={40} tint="dark" style={{ padding: 4 }}>
+                <View
+                  style={{
+                    backgroundColor: "rgba(255, 200, 0, 0.12)",
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "rgba(255, 200, 0, 0.35)",
+                    padding: 2,
+                  }}
+                >
+                  <TextInput
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="••••••••"
+                    placeholderTextColor="rgba(255,200,0,0.35)"
+                    secureTextEntry
+                    autoComplete="password"
+                    testID="password-input"
+                    style={{
+                      paddingHorizontal: 18,
+                      paddingVertical: 16,
+                      color: "#fff",
+                      fontSize: 16,
+                    }}
+                  />
+                </View>
+              </BlurView>
+            </View>
           </View>
 
           {/* Forgot password */}
@@ -155,47 +280,57 @@ export default function SignInScreen() {
             style={{ alignSelf: "flex-end", marginBottom: 32 }}
             testID="forgot-password-link"
           >
-            <Text style={{ color: "#cc0000", fontSize: 14, fontWeight: "600" }}>
+            <Text style={{ color: "#cc0000", fontSize: 13, fontWeight: "600", letterSpacing: 0.3 }}>
               Forgot Password?
             </Text>
           </Pressable>
 
-          {/* Sign In Button */}
+          {/* Sign In button */}
           <Pressable
             onPress={handleSignIn}
             disabled={loading}
             testID="sign-in-button"
-            style={({ pressed }) => ({ opacity: pressed || loading ? 0.7 : 1 })}
+            style={({ pressed }) => ({ opacity: pressed || loading ? 0.65 : 1 })}
           >
-            <LinearGradient
-              colors={["#ee1111", "#cc0000", "#aa0000"]}
-              style={{
-                borderRadius: 16,
-                paddingVertical: 18,
-                alignItems: "center",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: "800",
-                  color: "#fff",
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
-                }}
-              >
-                {loading ? "Signing In..." : "Sign In"}
-              </Text>
-            </LinearGradient>
+            <View style={{ borderRadius: 16, overflow: "hidden" }}>
+              <BlurView intensity={60} tint="dark">
+                <View
+                  style={{
+                    backgroundColor: "rgba(0, 180, 80, 0.25)",
+                    borderWidth: 1,
+                    borderColor: "rgba(0, 200, 80, 0.5)",
+                    borderRadius: 16,
+                    paddingVertical: 18,
+                    alignItems: "center",
+                    shadowColor: "#00e060",
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: 0.4,
+                    shadowRadius: 16,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "#00e060",
+                      fontWeight: "800",
+                      fontSize: 16,
+                      letterSpacing: 2,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {loading ? "Signing In..." : "Sign In"}
+                  </Text>
+                </View>
+              </BlurView>
+            </View>
           </Pressable>
 
           {/* Sign Up link */}
           <Pressable
             onPress={() => router.push("/sign-up" as any)}
-            style={{ marginTop: 24, alignItems: "center" }}
+            style={{ marginTop: 28, alignItems: "center" }}
             testID="sign-up-link"
           >
-            <Text style={{ color: "#555", fontSize: 15 }}>
+            <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 15 }}>
               Don't have an account?{" "}
               <Text style={{ color: "#cc0000", fontWeight: "700" }}>Sign Up</Text>
             </Text>
