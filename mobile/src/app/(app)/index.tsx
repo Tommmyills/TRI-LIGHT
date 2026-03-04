@@ -547,7 +547,7 @@ export default function ReachScreen() {
             color: "#1a1a1a",
           }}
         >
-          R.E.A.C.H.
+          TRI-LIGHT
         </Text>
       </View>
 
