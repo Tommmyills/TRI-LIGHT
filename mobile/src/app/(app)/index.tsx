@@ -11,8 +11,8 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
-  Linking,
 } from "react-native";
+import { router } from "expo-router";
 import * as Contacts from "expo-contacts";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -266,9 +266,17 @@ export default function ReachScreen() {
       );
 
       try {
-        const result = await api.post<{ videoRoomUrl: string }>("/api/reach", {});
+        const result = await api.post<{ videoRoomUrl: string; sessionId: string }>("/api/reach", {});
         if (result?.videoRoomUrl) {
-          Linking.openURL(result.videoRoomUrl);
+          router.push({
+            pathname: "/(app)/call",
+            params: {
+              sessionId: result.sessionId ?? "",
+              callerName: session?.user?.name ?? "Me",
+              roomUrl: result.videoRoomUrl,
+              isCaller: "true",
+            },
+          });
         }
         // Show sent confirmation with fade in
         setShowSentConfirmation(true);

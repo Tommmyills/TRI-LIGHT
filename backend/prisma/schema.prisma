@@ -68,3 +68,15 @@ model Person {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model CallSession {
+  id             String   @id @default(cuid())
+  callerId       String
+  callerName     String
+  recipientPhone String
+  roomUrl        String
+  roomName       String
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

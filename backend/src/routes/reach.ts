@@ -27,11 +27,11 @@ reachRouter.post("/", async (c) => {
   }
 
   let videoRoomUrl: string | null = null;
+  let roomName: string = `reach-${Date.now()}`;
 
   // Create Daily.co room
   if (env.DAILY_API_KEY) {
     try {
-      const roomName = `reach-${Date.now()}`;
       const dailyRes = await fetch("https://api.daily.co/v1/rooms", {
         method: "POST",
         headers: {
@@ -48,21 +48,38 @@ reachRouter.post("/", async (c) => {
       });
 
       if (dailyRes.ok) {
-        const dailyData = await dailyRes.json() as { url?: string };
+        const dailyData = await dailyRes.json() as { url?: string; name?: string };
         videoRoomUrl = dailyData.url || null;
+        if (dailyData.name) {
+          roomName = dailyData.name;
+        }
       }
     } catch (err) {
       console.error("Daily.co error:", err);
     }
   }
 
-  // Send Twilio SMS
+  // Save CallSession to DB
+  const callSession = await prisma.callSession.create({
+    data: {
+      callerId: user.id,
+      callerName: user.name,
+      recipientPhone: person.phone,
+      roomUrl: videoRoomUrl || "",
+      roomName: roomName,
+      status: "pending",
+    },
+  });
+
+  // Send Twilio SMS with deep link
   let smsSent = false;
   console.log("Twilio check - SID:", !!env.TWILIO_ACCOUNT_SID, "Token:", !!env.TWILIO_AUTH_TOKEN, "MsgSid:", !!env.TWILIO_MESSAGING_SERVICE_SID, "Phone:", !!person.phone);
   if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID && person.phone) {
     try {
+      const deepLink = `vibecode://call?sessionId=${encodeURIComponent(callSession.id)}&callerName=${encodeURIComponent(user.name)}&roomUrl=${encodeURIComponent(videoRoomUrl || "")}`;
+
       const smsBody = videoRoomUrl
-        ? `${user.name} is reaching out - join the video call: ${videoRoomUrl}`
+        ? `${user.name} is reaching out - join the video call: ${deepLink}`
         : `${user.name} is reaching out and wants to connect.`;
 
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
@@ -97,9 +114,71 @@ reachRouter.post("/", async (c) => {
   return c.json({
     data: {
       videoRoomUrl,
+      sessionId: callSession.id,
       smsSent,
     },
   });
+});
+
+// GET /api/reach/session/:sessionId - Get call session (public, no auth required)
+reachRouter.get("/session/:sessionId", async (c) => {
+  const sessionId = c.req.param("sessionId");
+
+  const callSession = await prisma.callSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!callSession) {
+    return c.json({ error: { message: "Session not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  return c.json({ data: callSession });
+});
+
+// PATCH /api/reach/session/:sessionId - Update session status (public, no auth required)
+reachRouter.patch("/session/:sessionId", async (c) => {
+  const sessionId = c.req.param("sessionId");
+
+  const body = await c.req.json() as { status?: string };
+  const { status } = body;
+
+  if (!status || !["accepted", "declined", "ended"].includes(status)) {
+    return c.json({ error: { message: "Invalid status. Must be accepted, declined, or ended", code: "INVALID_STATUS" } }, 400);
+  }
+
+  const existing = await prisma.callSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!existing) {
+    return c.json({ error: { message: "Session not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  const updated = await prisma.callSession.update({
+    where: { id: sessionId },
+    data: { status },
+  });
+
+  return c.json({ data: updated });
+});
+
+// DELETE /api/reach/session/:sessionId - End/delete session (caller use, no auth required)
+reachRouter.delete("/session/:sessionId", async (c) => {
+  const sessionId = c.req.param("sessionId");
+
+  const existing = await prisma.callSession.findUnique({
+    where: { id: sessionId },
+  });
+
+  if (!existing) {
+    return c.json({ error: { message: "Session not found", code: "NOT_FOUND" } }, 404);
+  }
+
+  await prisma.callSession.delete({
+    where: { id: sessionId },
+  });
+
+  return c.json({ data: { deleted: true } });
 });
 
 export { reachRouter };
