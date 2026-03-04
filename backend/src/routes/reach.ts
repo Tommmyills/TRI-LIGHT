@@ -71,15 +71,13 @@ reachRouter.post("/", async (c) => {
     },
   });
 
-  // Send Twilio SMS with deep link
+  // Send Twilio SMS with Daily.co browser link (no app required for recipient)
   let smsSent = false;
   console.log("Twilio check - SID:", !!env.TWILIO_ACCOUNT_SID, "Token:", !!env.TWILIO_AUTH_TOKEN, "MsgSid:", !!env.TWILIO_MESSAGING_SERVICE_SID, "Phone:", !!person.phone);
   if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID && person.phone) {
     try {
-      const deepLink = `vibecode://call?sessionId=${encodeURIComponent(callSession.id)}&callerName=${encodeURIComponent(user.name)}&roomUrl=${encodeURIComponent(videoRoomUrl || "")}`;
-
       const smsBody = videoRoomUrl
-        ? `${user.name} is reaching out - join the video call: ${deepLink}`
+        ? `${user.name} is reaching out - join the video call: ${videoRoomUrl}`
         : `${user.name} is reaching out and wants to connect.`;
 
       const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
