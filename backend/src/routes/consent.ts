@@ -3,7 +3,7 @@ import { prisma } from "../prisma";
 
 const consentRouter = new Hono();
 
-function consentPage(senderName: string): string {
+function consentPage(senderName: string, token: string): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -30,10 +30,10 @@ function consentPage(senderName: string): string {
     <h1><span class="sender">${senderName}</span> wants you as their accountability contact</h1>
     <p>By accepting, you agree to receive SMS check-in messages when ${senderName} needs support.</p>
     <div class="terms">You can opt out at any time by replying STOP to any message, or by declining below.</div>
-    <form method="POST" action="accept">
+    <form method="POST" action="/consent/${token}/accept">
       <button type="submit" class="accept">I Accept</button>
     </form>
-    <form method="POST" action="decline" style="margin-top: 8px">
+    <form method="POST" action="/consent/${token}/decline" style="margin-top: 8px">
       <button type="submit" class="decline">No Thanks</button>
     </form>
   </div>
@@ -86,7 +86,7 @@ consentRouter.get("/:token", async (c) => {
     return c.html(statusPage("Declined", "You've declined this invitation."));
   }
 
-  return c.html(consentPage(invitation.senderName));
+  return c.html(consentPage(invitation.senderName, token));
 });
 
 // POST /consent/:token/accept - Accept consent
