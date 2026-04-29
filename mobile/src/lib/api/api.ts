@@ -24,11 +24,22 @@ const request = async <T>(
     return undefined as T;
   }
 
-  // 2. JSON responses: parse and unwrap { data }
+  // 2. JSON responses: parse and unwrap { data } or throw on error
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
-    const json: ApiResponse<T> = await response.json();
+    const json = await response.json() as ApiResponse<T> & { error?: { message?: string; code?: string } };
+    if (!response.ok) {
+      const err = Object.assign(new Error(json.error?.message ?? "Request failed"), {
+        code: json.error?.code,
+        status: response.status,
+      });
+      throw err;
+    }
     return json.data;
+  }
+
+  if (!response.ok) {
+    throw Object.assign(new Error("Request failed"), { status: response.status });
   }
 
   // 3. Non-JSON: return undefined

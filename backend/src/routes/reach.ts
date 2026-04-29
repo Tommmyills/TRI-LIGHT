@@ -10,6 +10,49 @@ const reachRouter = new Hono<{
   };
 }>();
 
+async function sendInviteSms(
+  toPhone: string,
+  senderName: string,
+  token: string
+): Promise<void> {
+  if (
+    !env.TWILIO_ACCOUNT_SID ||
+    !env.TWILIO_AUTH_TOKEN ||
+    !env.TWILIO_MESSAGING_SERVICE_SID
+  ) {
+    return;
+  }
+
+  const inviteUrl = `${env.BACKEND_URL}/consent/${token}`;
+  const body = `${senderName} added you as their accountability contact on TRI-LIGHT APP.\n\nTap to accept and receive their check-in messages:\n${inviteUrl}\n\nReply STOP to opt out.`;
+
+  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+  const credentials = Buffer.from(
+    `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`
+  ).toString("base64");
+
+  const formData = new URLSearchParams();
+  formData.append("To", toPhone);
+  formData.append("MessagingServiceSid", env.TWILIO_MESSAGING_SERVICE_SID);
+  formData.append("Body", body);
+
+  const res = await fetch(twilioUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: formData.toString(),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error("Failed to send invite SMS:", res.status, errText);
+  } else {
+    console.log("Invite SMS resent to:", toPhone);
+  }
+}
+
 // POST /api/reach - Called when user presses the REACH button
 reachRouter.post("/", async (c) => {
   const user = c.get("user");
@@ -24,6 +67,32 @@ reachRouter.post("/", async (c) => {
 
   if (!person) {
     return c.json({ error: { message: "No person saved", code: "NO_PERSON" } }, 404);
+  }
+
+  // Check consent before sending any SMS
+  const invitation = await prisma.consentInvitation.findUnique({
+    where: { userId: user.id },
+  });
+
+  if (!invitation?.consentedAt) {
+    // Resend invite SMS so the accountability person gets another chance to accept
+    if (invitation && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID) {
+      try {
+        await sendInviteSms(invitation.personPhone, invitation.senderName, invitation.token);
+      } catch (err) {
+        console.error("Error resending invite SMS:", err);
+      }
+    }
+    return c.json(
+      {
+        error: {
+          message:
+            "Waiting for your accountability person to accept the invitation. We've resent the invite.",
+          code: "CONSENT_PENDING",
+        },
+      },
+      403
+    );
   }
 
   let videoRoomUrl: string | null = null;

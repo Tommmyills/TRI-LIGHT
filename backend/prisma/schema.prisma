@@ -8,16 +8,31 @@ datasource db {
 }
 
 model User {
-  id            String    @id
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  person        Person?
+  id                 String              @id
+  name               String
+  email              String              @unique
+  emailVerified      Boolean             @default(false)
+  image              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  sessions           Session[]
+  accounts           Account[]
+  person             Person?
+  consentInvitation  ConsentInvitation?
+}
+
+model ConsentInvitation {
+  id          String    @id @default(cuid())
+  token       String    @unique @default(cuid())
+  personPhone String
+  personName  String
+  senderName  String
+  userId      String    @unique
+  consentedAt DateTime?
+  declinedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {

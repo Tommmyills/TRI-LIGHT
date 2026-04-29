@@ -44,6 +44,7 @@ interface Person {
   name: string;
   phone: string;
   deviceId: string;
+  consentStatus?: 'confirmed' | 'pending' | 'declined' | 'none';
 }
 
 export default function ReachScreen() {
@@ -65,10 +66,12 @@ export default function ReachScreen() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [reaching, setReaching] = useState(false);
+  const [consentStatus, setConsentStatus] = useState<'confirmed' | 'pending' | 'declined' | 'none' | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Contact picker states
   const [showContactPicker, setShowContactPicker] = useState(false);
-  const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
+  const [contacts, setContacts] = useState<Contacts.ExistingContact[]>([]);
   const [contactSearch, setContactSearch] = useState("");
   const [loadingContacts, setLoadingContacts] = useState(false);
 
@@ -106,6 +109,7 @@ export default function ReachScreen() {
           const savedPerson = await api.get<Person | null>("/api/person/for-user");
           if (savedPerson) {
             setPerson(savedPerson);
+            setConsentStatus(savedPerson.consentStatus ?? 'none');
           }
         } catch {
           // ignore
@@ -288,8 +292,14 @@ export default function ReachScreen() {
           sentOpacity.value = withTiming(0, { duration: 400 });
           setTimeout(() => setShowSentConfirmation(false), 420);
         }, 3000);
-      } catch {
-        Alert.alert("Error", "Could not reach. Please try again.");
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code === 'CONSENT_PENDING') {
+          setStatusMessage(`Invitation resent to ${person?.name ?? 'your person'}. Ask them to check their messages.`);
+          setTimeout(() => setStatusMessage(null), 4000);
+        } else {
+          Alert.alert("Error", "Could not reach. Please try again.");
+        }
       } finally {
         setReaching(false);
       }
@@ -315,11 +325,15 @@ export default function ReachScreen() {
 
       if (savedPerson) {
         setPerson(savedPerson);
+        setConsentStatus(savedPerson.consentStatus ?? 'pending');
       }
 
+      const savedName = name.trim();
       modalSlide.value = withTiming(0, { duration: 300 });
       setTimeout(() => {
         setShowModal(false);
+        setStatusMessage(`Invitation sent to ${savedName}!`);
+        setTimeout(() => setStatusMessage(null), 3000);
         setShowConfirmation(true);
 
         checkScale.value = withSequence(
@@ -549,6 +563,48 @@ export default function ReachScreen() {
         >
           TRI-LIGHT
         </Text>
+
+        {/* Consent status message */}
+        {consentStatus === 'pending' && person ? (
+          <Text
+            style={{
+              marginTop: 16,
+              fontSize: 13,
+              color: "#555",
+              textAlign: "center",
+              paddingHorizontal: 32,
+            }}
+          >
+            Waiting for {person.name} to accept your invitation
+          </Text>
+        ) : consentStatus === 'declined' && person ? (
+          <Text
+            style={{
+              marginTop: 16,
+              fontSize: 13,
+              color: "#b45309",
+              textAlign: "center",
+              paddingHorizontal: 32,
+            }}
+          >
+            {person.name} declined. Tap the gear icon to change your person.
+          </Text>
+        ) : null}
+
+        {/* Transient status message (invitation sent / consent pending resend) */}
+        {statusMessage ? (
+          <Text
+            style={{
+              marginTop: 16,
+              fontSize: 13,
+              color: "#cc0000",
+              textAlign: "center",
+              paddingHorizontal: 32,
+            }}
+          >
+            {statusMessage}
+          </Text>
+        ) : null}
       </View>
 
       {/* Registration / Edit Person Modal */}

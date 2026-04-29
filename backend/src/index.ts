@@ -6,6 +6,7 @@ import { auth } from "./auth";
 import { sampleRouter } from "./routes/sample";
 import { personRouter } from "./routes/person";
 import { reachRouter } from "./routes/reach";
+import { consentRouter } from "./routes/consent";
 import { logger } from "hono/logger";
 
 const app = new Hono<{
@@ -60,6 +61,9 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 app.route("/api/sample", sampleRouter);
 app.route("/api/person", personRouter);
 app.route("/api/reach", reachRouter);
+
+// Public consent/opt-in pages (no /api/ prefix - served as web pages)
+app.route("/consent", consentRouter);
 
 const port = Number(process.env.PORT) || 3000;
 
