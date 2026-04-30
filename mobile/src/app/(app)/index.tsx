@@ -476,26 +476,65 @@ export default function ReachScreen() {
               },
             ]}
           >
-            {/* Shadow layer */}
+            {/* === OUTER RED GLOW - wide soft halo === */}
             <View
               style={{
                 position: "absolute",
+                top: 0,
+                left: 0,
                 width: BUTTON_SIZE,
                 height: BUTTON_SIZE,
                 borderRadius: BUTTON_SIZE / 2,
-                backgroundColor: "#440000",
-                top: 6,
+                backgroundColor: "rgba(200,0,0,0.01)",
+                shadowColor: "#ff1111",
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.55,
+                shadowRadius: 52,
+                elevation: 0,
+              }}
+            />
+            {/* === OUTER RED GLOW - tight inner halo === */}
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: BUTTON_SIZE,
+                height: BUTTON_SIZE,
+                borderRadius: BUTTON_SIZE / 2,
+                backgroundColor: "rgba(180,0,0,0.01)",
                 shadowColor: "#cc0000",
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.5,
-                shadowRadius: 30,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.9,
+                shadowRadius: 18,
+                elevation: 0,
+              }}
+            />
+
+            {/* === BOTTOM DROP SHADOW (pressable depth illusion) === */}
+            <View
+              style={{
+                position: "absolute",
+                top: 13,
+                left: 8,
+                width: BUTTON_SIZE - 16,
+                height: BUTTON_SIZE - 16,
+                borderRadius: (BUTTON_SIZE - 16) / 2,
+                backgroundColor: "#1a0000",
+                shadowColor: "#000000",
+                shadowOffset: { width: 0, height: 22 },
+                shadowOpacity: 0.8,
+                shadowRadius: 26,
                 elevation: 20,
               }}
             />
 
-            {/* Button face */}
+            {/* === METALLIC OUTER RING - dark graphite/gunmetal === */}
             <View
               style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
                 width: BUTTON_SIZE,
                 height: BUTTON_SIZE,
                 borderRadius: BUTTON_SIZE / 2,
@@ -503,48 +542,193 @@ export default function ReachScreen() {
               }}
             >
               <LinearGradient
-                colors={["#ee1111", "#cc0000", "#990000", "#660000"]}
-                locations={[0, 0.3, 0.7, 1]}
+                colors={["#4d4d4d", "#252525", "#0e0e0e", "#1c1c1c", "#3d3d3d"]}
+                locations={[0, 0.2, 0.5, 0.75, 1]}
+                start={{ x: 0.2, y: 0 }}
+                end={{ x: 0.8, y: 1 }}
+                style={{ width: "100%", height: "100%" }}
+              />
+              {/* Soft metallic reflection - top-left */}
+              <LinearGradient
+                colors={[
+                  "rgba(255,255,255,0.16)",
+                  "rgba(255,255,255,0.04)",
+                  "transparent",
+                ]}
+                locations={[0, 0.35, 1]}
+                start={{ x: 0.05, y: 0 }}
+                end={{ x: 0.65, y: 0.65 }}
                 style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
                   width: "100%",
                   height: "100%",
-                  borderRadius: BUTTON_SIZE / 2,
+                }}
+              />
+            </View>
+
+            {/* === RING INNER BEVEL SHADOW === */}
+            <View
+              style={{
+                position: "absolute",
+                top: 12,
+                left: 12,
+                width: BUTTON_SIZE - 24,
+                height: BUTTON_SIZE - 24,
+                borderRadius: (BUTTON_SIZE - 24) / 2,
+                backgroundColor: "#080808",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.95,
+                shadowRadius: 6,
+                elevation: 8,
+              }}
+            />
+
+            {/* === CONVEX BUTTON FACE === */}
+            <View
+              style={{
+                position: "absolute",
+                top: 14,
+                left: 14,
+                width: BUTTON_SIZE - 28,
+                height: BUTTON_SIZE - 28,
+                borderRadius: (BUTTON_SIZE - 28) / 2,
+                overflow: "hidden",
+              }}
+            >
+              {/* Base gradient: bright red top → deep crimson bottom */}
+              <LinearGradient
+                colors={["#ff4444", "#ee1515", "#cc0000", "#880000", "#4d0000"]}
+                locations={[0, 0.15, 0.45, 0.78, 1]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
                 }}
               />
 
-              {/* Glossy highlight */}
+              {/* Side curvature darkening (left + right edge falloff) */}
+              <LinearGradient
+                colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.45)"]}
+                locations={[0, 0.5, 1]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
+
+              {/* Bottom curvature darkening */}
+              <LinearGradient
+                colors={["transparent", "transparent", "rgba(0,0,0,0.55)"]}
+                locations={[0, 0.4, 1]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
+
+              {/* Main glossy highlight (large oval, glass/plastic surface) */}
               <View
                 style={{
                   position: "absolute",
-                  top: 8,
-                  left: BUTTON_SIZE * 0.15,
-                  width: BUTTON_SIZE * 0.7,
-                  height: BUTTON_SIZE * 0.4,
-                  borderRadius: BUTTON_SIZE * 0.35,
+                  top: 5,
+                  left: (BUTTON_SIZE - 28) * 0.08,
+                  width: (BUTTON_SIZE - 28) * 0.84,
+                  height: (BUTTON_SIZE - 28) * 0.46,
+                  borderRadius: (BUTTON_SIZE - 28) * 0.4,
                   overflow: "hidden",
                 }}
               >
                 <LinearGradient
                   colors={[
-                    "rgba(255,255,255,0.35)",
-                    "rgba(255,255,255,0.08)",
+                    "rgba(255,255,255,0.68)",
+                    "rgba(255,255,255,0.28)",
+                    "rgba(255,255,255,0.06)",
                     "transparent",
                   ]}
+                  locations={[0, 0.22, 0.6, 1]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
                   style={{ width: "100%", height: "100%" }}
                 />
               </View>
 
-              {/* Inner edge ring */}
+              {/* Small bright specular hotspot */}
               <View
                 style={{
                   position: "absolute",
-                  top: 3,
-                  left: 3,
-                  right: 3,
-                  bottom: 3,
-                  borderRadius: BUTTON_SIZE / 2,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.08)",
+                  top: 9,
+                  left: (BUTTON_SIZE - 28) * 0.28,
+                  width: (BUTTON_SIZE - 28) * 0.44,
+                  height: (BUTTON_SIZE - 28) * 0.19,
+                  borderRadius: (BUTTON_SIZE - 28) * 0.12,
+                  overflow: "hidden",
+                }}
+              >
+                <LinearGradient
+                  colors={[
+                    "rgba(255,255,255,0.95)",
+                    "rgba(255,255,255,0.45)",
+                    "transparent",
+                  ]}
+                  locations={[0, 0.3, 1]}
+                  start={{ x: 0.5, y: 0 }}
+                  end={{ x: 0.5, y: 1 }}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </View>
+
+              {/* Bottom rim warm bounce light */}
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 11,
+                  left: (BUTTON_SIZE - 28) * 0.28,
+                  width: (BUTTON_SIZE - 28) * 0.44,
+                  height: 10,
+                  borderRadius: 5,
+                  overflow: "hidden",
+                }}
+              >
+                <LinearGradient
+                  colors={[
+                    "transparent",
+                    "rgba(255,110,70,0.3)",
+                    "transparent",
+                  ]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{ width: "100%", height: "100%" }}
+                />
+              </View>
+
+              {/* Inner edge shadow ring (convex rim depth) */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: (BUTTON_SIZE - 28) / 2,
+                  borderWidth: 4,
+                  borderColor: "rgba(0,0,0,0.28)",
                 }}
               />
             </View>
