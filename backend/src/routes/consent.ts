@@ -112,8 +112,8 @@ consentRouter.post("/:token/accept", async (c) => {
 
   return c.html(
     statusPage(
-      "You're In!",
-      `Thank you for accepting. You'll now receive SMS check-in messages from ${invitation.senderName} when they need support. Reply STOP at any time to opt out.`
+      "You're all set!",
+      `When ${invitation.senderName} needs you, you'll get another email with a Join Call button to start a video call immediately. Stay close to your phone.`
     )
   );
 });

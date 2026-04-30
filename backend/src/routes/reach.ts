@@ -139,8 +139,18 @@ reachRouter.post("/", async (c) => {
   if (env.RESEND_API_KEY && person.phone) {
     try {
       const emailHtml = videoRoomUrl
-        ? `<p><strong>${user.name}</strong> is reaching out to you.</p><p><a href="${videoRoomUrl}" style="background:#007AFF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Join Video Call</a></p><p style="color:#999;font-size:12px;">${videoRoomUrl}</p>`
-        : `<p><strong>${user.name}</strong> is reaching out and wants to connect with you.</p>`;
+        ? `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;min-height:100vh;padding:40px 20px;text-align:center;">
+  <div style="max-width:480px;margin:0 auto;background:#1a1a1a;border-radius:20px;padding:40px 32px;">
+    <div style="font-size:13px;font-weight:700;letter-spacing:3px;color:#888;margin-bottom:24px;">TRI-LIGHT APP</div>
+    <div style="font-size:48px;margin-bottom:16px;">🚨</div>
+    <h1 style="color:#fff;font-size:26px;font-weight:800;margin:0 0 12px;">${user.name} needs you right now</h1>
+    <p style="color:#aaa;font-size:16px;line-height:1.6;margin:0 0 36px;">They're reaching out for support. Please join the call immediately.</p>
+    <a href="${videoRoomUrl}" style="display:block;background:#e00;color:#fff;font-size:20px;font-weight:800;padding:20px 24px;border-radius:14px;text-decoration:none;letter-spacing:0.5px;margin-bottom:20px;">JOIN VIDEO CALL NOW</a>
+    <p style="color:#555;font-size:12px;word-break:break-all;">${videoRoomUrl}</p>
+  </div>
+</div>`
+        : `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;min-height:100vh;padding:40px 20px;text-align:center;"><div style="max-width:480px;margin:0 auto;background:#1a1a1a;border-radius:20px;padding:40px 32px;"><div style="font-size:13px;font-weight:700;letter-spacing:3px;color:#888;margin-bottom:24px;">TRI-LIGHT APP</div><h1 style="color:#fff;font-size:24px;font-weight:800;margin:0 0 12px;">${user.name} is reaching out</h1><p style="color:#aaa;font-size:16px;line-height:1.6;margin:0;">They want to connect with you. Please reach back as soon as you can.</p></div></div>`;
 
       const emailSubject = videoRoomUrl
         ? `${user.name} is reaching out — join the video call`
