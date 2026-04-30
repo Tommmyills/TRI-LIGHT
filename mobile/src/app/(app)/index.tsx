@@ -379,7 +379,7 @@ export default function ReachScreen() {
     setShowContactPicker(true);
     try {
       const result = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        fields: [Contacts.Fields.Name, Contacts.Fields.Emails],
         sort: Contacts.SortTypes.FirstName,
       });
       setContacts(result.data);
@@ -393,9 +393,9 @@ export default function ReachScreen() {
 
   const handleSelectContact = useCallback((contact: Contacts.Contact) => {
     const contactName = contact.name ?? [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-    const contactPhone = contact.phoneNumbers?.[0]?.number ?? "";
+    const contactEmail = contact.emails?.[0]?.email ?? "";
     setName(contactName);
-    setPhone(contactPhone);
+    setPhone(contactEmail);
     setShowContactPicker(false);
     setContactSearch("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -645,7 +645,7 @@ export default function ReachScreen() {
               {person ? "Change my person" : "Who's your person?"}
             </Text>
             <Text style={{ fontSize: 16, color: "#666666", marginBottom: 20, lineHeight: 22 }}>
-              {person ? "Update the name or number." : "The one who picks up."}
+              {person ? "Update the name or email." : "The one who picks up."}
             </Text>
 
             {/* Choose from Contacts */}
@@ -686,14 +686,15 @@ export default function ReachScreen() {
 
             <View style={{ marginBottom: 32 }}>
               <Text style={{ fontSize: 13, fontWeight: "600", color: "#555", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-                Phone Number
+                Email Address
               </Text>
               <TextInput
                 value={phone}
                 onChangeText={setPhone}
-                placeholder="(555) 000-0000"
+                placeholder="their@email.com"
                 placeholderTextColor="#444"
-                keyboardType="phone-pad"
+                keyboardType="email-address"
+                autoCapitalize="none"
                 style={{ backgroundColor: "#1a1a1a", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, fontSize: 17, color: "#fff", borderWidth: 1, borderColor: "#222" }}
               />
             </View>
@@ -952,7 +953,7 @@ export default function ReachScreen() {
                   </View>
                 )}
                 renderItem={({ item }) => {
-                  const phoneNum = item.phoneNumbers?.[0]?.number ?? null;
+                  const phoneNum = item.emails?.[0]?.email ?? null;
                   if (!phoneNum) return null;
                   return (
                     <Pressable
