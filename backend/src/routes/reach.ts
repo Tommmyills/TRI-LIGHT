@@ -31,7 +31,7 @@ async function sendInviteEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "TRI-LIGHT <support@trilightapp.com>",
+      from: "TRI-LIGHT <support@updates.trilightapp.com>",
       to: [toEmail],
       subject: `${senderName} added you as their accountability contact`,
       html,
@@ -153,7 +153,7 @@ reachRouter.post("/", async (c) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "TRI-LIGHT <support@trilightapp.com>",
+          from: "TRI-LIGHT <support@updates.trilightapp.com>",
           to: [person.phone],
           subject: emailSubject,
           html: emailHtml,
