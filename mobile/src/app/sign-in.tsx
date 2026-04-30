@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { Eye, EyeOff } from "lucide-react-native";
 import { router } from "expo-router";
 import { BlurView } from "expo-blur";
 import Animated, {
@@ -92,6 +93,7 @@ function GlowOrb({
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const invalidateSession = useInvalidateSession();
 
@@ -252,6 +254,8 @@ export default function SignInScreen() {
                     borderWidth: 1,
                     borderColor: "rgba(255, 200, 0, 0.35)",
                     padding: 2,
+                    flexDirection: "row",
+                    alignItems: "center",
                   }}
                 >
                   <TextInput
@@ -259,16 +263,28 @@ export default function SignInScreen() {
                     onChangeText={setPassword}
                     placeholder="••••••••"
                     placeholderTextColor="rgba(255,200,0,0.35)"
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                     autoComplete="password"
                     testID="password-input"
                     style={{
+                      flex: 1,
                       paddingHorizontal: 18,
                       paddingVertical: 16,
                       color: "#fff",
                       fontSize: 16,
                     }}
                   />
+                  <Pressable
+                    onPress={() => setShowPassword((v) => !v)}
+                    style={{ paddingHorizontal: 14 }}
+                    testID="toggle-password-visibility"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={18} color="rgba(255,200,0,0.5)" />
+                    ) : (
+                      <Eye size={18} color="rgba(255,200,0,0.5)" />
+                    )}
+                  </Pressable>
                 </View>
               </BlurView>
             </View>

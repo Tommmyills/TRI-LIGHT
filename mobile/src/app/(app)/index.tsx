@@ -308,7 +308,7 @@ export default function ReachScreen() {
 
   const handleSavePerson = useCallback(async () => {
     if (!name.trim() || !phone.trim()) {
-      Alert.alert("Missing Info", "Please enter both name and phone number.");
+      Alert.alert("Missing Info", "Please enter both name and email address.");
       return;
     }
 
@@ -879,6 +879,8 @@ export default function ReachScreen() {
                 placeholderTextColor="#444"
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoComplete="email"
+                textContentType="emailAddress"
                 style={{ backgroundColor: "#1a1a1a", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, fontSize: 17, color: "#fff", borderWidth: 1, borderColor: "#222" }}
               />
             </View>

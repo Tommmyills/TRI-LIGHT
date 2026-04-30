@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
 } from "react-native";
+import { Eye, EyeOff } from "lucide-react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -19,6 +20,7 @@ export default function SignUpScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const invalidateSession = useInvalidateSession();
 
@@ -119,15 +121,28 @@ export default function SignUpScreen() {
             <Text style={{ fontSize: 12, fontWeight: "700", color: "#444", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1.5 }}>
               Password
             </Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor="#333"
-              secureTextEntry
-              testID="password-input"
-              style={{ backgroundColor: "#111", borderRadius: 14, paddingHorizontal: 18, paddingVertical: 16, fontSize: 16, color: "#fff", borderWidth: 1, borderColor: "#1e1e1e" }}
-            />
+            <View style={{ backgroundColor: "#111", borderRadius: 14, borderWidth: 1, borderColor: "#1e1e1e", flexDirection: "row", alignItems: "center" }}>
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor="#333"
+                secureTextEntry={!showPassword}
+                testID="password-input"
+                style={{ flex: 1, paddingHorizontal: 18, paddingVertical: 16, fontSize: 16, color: "#fff" }}
+              />
+              <Pressable
+                onPress={() => setShowPassword((v) => !v)}
+                style={{ paddingHorizontal: 14 }}
+                testID="toggle-password-visibility"
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color="#555" />
+                ) : (
+                  <Eye size={18} color="#555" />
+                )}
+              </Pressable>
+            </View>
           </View>
 
           {/* Sign Up Button */}
