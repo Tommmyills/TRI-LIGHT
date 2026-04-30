@@ -10,46 +10,39 @@ const personRouter = new Hono<{
   };
 }>();
 
-async function sendInviteSms(
-  toPhone: string,
+async function sendInviteEmail(
+  toEmail: string,
   senderName: string,
   token: string
 ): Promise<void> {
-  if (
-    !env.TWILIO_ACCOUNT_SID ||
-    !env.TWILIO_AUTH_TOKEN ||
-    !env.TWILIO_MESSAGING_SERVICE_SID
-  ) {
-    return;
-  }
+  if (!env.RESEND_API_KEY) return;
 
   const inviteUrl = `${env.BACKEND_URL}/consent/${token}`;
-  const body = `${senderName} added you as their accountability contact on TRI-LIGHT APP.\n\nTap to accept and receive their check-in messages:\n${inviteUrl}\n\nReply STOP to opt out.`;
+  const html = `
+    <p>${senderName} added you as their accountability contact on <strong>TRI-LIGHT</strong>.</p>
+    <p><a href="${inviteUrl}">Tap here to accept and receive their check-in notifications</a></p>
+    <p style="color:#999;font-size:12px;">If you did not expect this, you can ignore this email.</p>
+  `;
 
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
-  const credentials = Buffer.from(
-    `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`
-  ).toString("base64");
-
-  const formData = new URLSearchParams();
-  formData.append("To", toPhone);
-  formData.append("MessagingServiceSid", env.TWILIO_MESSAGING_SERVICE_SID);
-  formData.append("Body", body);
-
-  const res = await fetch(twilioUrl, {
+  const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
     },
-    body: formData.toString(),
+    body: JSON.stringify({
+      from: "TRI-LIGHT <support@trilightapp.com>",
+      to: [toEmail],
+      subject: `${senderName} added you as their accountability contact`,
+      html,
+    }),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Failed to send invite SMS:", res.status, errText);
+    console.error("Failed to send invite email:", res.status, errText);
   } else {
-    console.log("Invite SMS sent to:", toPhone);
+    console.log("Invite email sent to:", toEmail);
   }
 }
 
@@ -103,7 +96,7 @@ personRouter.post("/", async (c) => {
 
       // Send invite SMS
       try {
-        await sendInviteSms(phone, senderName, invitation.token);
+        await sendInviteEmail(phone, senderName, invitation.token);
       } catch (err) {
         console.error("Error sending invite SMS:", err);
       }
@@ -121,7 +114,7 @@ personRouter.post("/", async (c) => {
       });
 
       try {
-        await sendInviteSms(phone, senderName, updated.token);
+        await sendInviteEmail(phone, senderName, updated.token);
       } catch (err) {
         console.error("Error sending invite SMS:", err);
       }

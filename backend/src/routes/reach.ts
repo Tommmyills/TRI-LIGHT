@@ -10,46 +10,39 @@ const reachRouter = new Hono<{
   };
 }>();
 
-async function sendInviteSms(
-  toPhone: string,
+async function sendInviteEmail(
+  toEmail: string,
   senderName: string,
   token: string
 ): Promise<void> {
-  if (
-    !env.TWILIO_ACCOUNT_SID ||
-    !env.TWILIO_AUTH_TOKEN ||
-    !env.TWILIO_MESSAGING_SERVICE_SID
-  ) {
-    return;
-  }
+  if (!env.RESEND_API_KEY) return;
 
   const inviteUrl = `${env.BACKEND_URL}/consent/${token}`;
-  const body = `${senderName} added you as their accountability contact on TRI-LIGHT APP.\n\nTap to accept and receive their check-in messages:\n${inviteUrl}\n\nReply STOP to opt out.`;
+  const html = `
+    <p>${senderName} added you as their accountability contact on <strong>TRI-LIGHT</strong>.</p>
+    <p><a href="${inviteUrl}">Tap here to accept and receive their check-in notifications</a></p>
+    <p style="color:#999;font-size:12px;">If you did not expect this, you can ignore this email.</p>
+  `;
 
-  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
-  const credentials = Buffer.from(
-    `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`
-  ).toString("base64");
-
-  const formData = new URLSearchParams();
-  formData.append("To", toPhone);
-  formData.append("MessagingServiceSid", env.TWILIO_MESSAGING_SERVICE_SID);
-  formData.append("Body", body);
-
-  const res = await fetch(twilioUrl, {
+  const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
     },
-    body: formData.toString(),
+    body: JSON.stringify({
+      from: "TRI-LIGHT <support@trilightapp.com>",
+      to: [toEmail],
+      subject: `${senderName} added you as their accountability contact`,
+      html,
+    }),
   });
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error("Failed to send invite SMS:", res.status, errText);
+    console.error("Failed to send invite email:", res.status, errText);
   } else {
-    console.log("Invite SMS resent to:", toPhone);
+    console.log("Invite email sent to:", toEmail);
   }
 }
 
@@ -75,12 +68,12 @@ reachRouter.post("/", async (c) => {
   });
 
   if (!invitation?.consentedAt) {
-    // Resend invite SMS so the accountability person gets another chance to accept
-    if (invitation && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID) {
+    // Resend invite email so the accountability person gets another chance to accept
+    if (invitation && env.RESEND_API_KEY) {
       try {
-        await sendInviteSms(invitation.personPhone, invitation.senderName, invitation.token);
+        await sendInviteEmail(invitation.personPhone, invitation.senderName, invitation.token);
       } catch (err) {
-        console.error("Error resending invite SMS:", err);
+        console.error("Error resending invite email:", err);
       }
     }
     return c.json(
@@ -140,41 +133,42 @@ reachRouter.post("/", async (c) => {
     },
   });
 
-  // Send Twilio SMS with Daily.co browser link (no app required for recipient)
+  // Send Resend email with Daily.co browser link (no app required for recipient)
   let smsSent = false;
-  console.log("Twilio check - SID:", !!env.TWILIO_ACCOUNT_SID, "Token:", !!env.TWILIO_AUTH_TOKEN, "MsgSid:", !!env.TWILIO_MESSAGING_SERVICE_SID, "Phone:", !!person.phone);
-  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_MESSAGING_SERVICE_SID && person.phone) {
+  console.log("Resend check - API key present:", !!env.RESEND_API_KEY, "Phone/email:", !!person.phone);
+  if (env.RESEND_API_KEY && person.phone) {
     try {
-      const smsBody = videoRoomUrl
-        ? `${user.name} is reaching out - join the video call: ${videoRoomUrl}`
-        : `${user.name} is reaching out and wants to connect.`;
+      const emailHtml = videoRoomUrl
+        ? `<p><strong>${user.name}</strong> is reaching out to you.</p><p><a href="${videoRoomUrl}" style="background:#007AFF;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Join Video Call</a></p><p style="color:#999;font-size:12px;">${videoRoomUrl}</p>`
+        : `<p><strong>${user.name}</strong> is reaching out and wants to connect with you.</p>`;
 
-      const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
-      const credentials = Buffer.from(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`).toString("base64");
+      const emailSubject = videoRoomUrl
+        ? `${user.name} is reaching out — join the video call`
+        : `${user.name} is reaching out to you`;
 
-      const formData = new URLSearchParams();
-      formData.append("To", person.phone);
-      formData.append("MessagingServiceSid", env.TWILIO_MESSAGING_SERVICE_SID);
-      formData.append("Body", smsBody);
-
-      const twilioRes = await fetch(twilioUrl, {
+      const reachRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
-          Authorization: `Basic ${credentials}`,
-          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
         },
-        body: formData.toString(),
+        body: JSON.stringify({
+          from: "TRI-LIGHT <support@trilightapp.com>",
+          to: [person.phone],
+          subject: emailSubject,
+          html: emailHtml,
+        }),
       });
 
-      if (twilioRes.ok) {
+      if (reachRes.ok) {
         smsSent = true;
-        console.log("Twilio SMS sent successfully to:", person.phone);
+        console.log("Resend email sent successfully to:", person.phone);
       } else {
-        const errData = await twilioRes.text();
-        console.error("Twilio SMS FAILED:", twilioRes.status, errData);
+        const errData = await reachRes.text();
+        console.error("Resend email FAILED:", reachRes.status, errData);
       }
     } catch (err) {
-      console.error("Twilio SMS error:", err);
+      console.error("Resend email error:", err);
     }
   }
 

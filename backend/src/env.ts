@@ -6,11 +6,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string(),
   BACKEND_URL: z.string().default("http://localhost:3000"),
   BETTER_AUTH_SECRET: z.string().min(1, "BETTER_AUTH_SECRET is required"),
-  TWILIO_ACCOUNT_SID: z.string().optional().default(""),
-  TWILIO_AUTH_TOKEN: z.string().optional().default(""),
-  TWILIO_PHONE_NUMBER: z.string().optional().default(""),
-  TWILIO_MESSAGING_SERVICE_SID: z.string().optional().default(""),
   DAILY_API_KEY: z.string().optional().default(""),
+  RESEND_API_KEY: z.string().optional().default(""),
 });
 
 function validateEnv() {
