@@ -25,6 +25,8 @@ const allowed = [
   /^https:\/\/[a-z0-9-]+\.vibecodeapp\.com$/,
   /^https:\/\/[a-z0-9-]+\.vibecode\.dev$/,
   /^https:\/\/vibecode\.dev$/,
+  /^https:\/\/[a-z0-9-]+\.vercel\.app$/,
+  /^https:\/\/[a-z0-9-]+\.up\.railway\.app$/,
 ];
 
 app.use(
