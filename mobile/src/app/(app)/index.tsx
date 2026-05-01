@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -48,6 +48,50 @@ interface PersonWithConsent {
   deviceId: string;
   slot: number;
   consentStatus?: 'confirmed' | 'pending' | 'declined' | 'none';
+}
+
+function HoneycombDots({ size }: { size: number }) {
+  const dots = useMemo(() => {
+    const result: { x: number; y: number; key: string }[] = [];
+    const dotSize = 11;
+    const step = 14;
+    const stepY = step * 0.866;
+    const radius = size / 2;
+    const center = size / 2;
+    let row = 0;
+    for (let y = -dotSize; y < size + dotSize; y += stepY) {
+      const offsetX = (row % 2) * (step / 2);
+      for (let x = -dotSize + offsetX; x < size + dotSize; x += step) {
+        const cx = x + dotSize / 2;
+        const cy = y + dotSize / 2;
+        const dist = Math.sqrt((cx - center) ** 2 + (cy - center) ** 2);
+        if (dist < radius - 6) {
+          result.push({ x, y, key: `${Math.round(x)}-${Math.round(y)}` });
+        }
+      }
+      row++;
+    }
+    return result;
+  }, [size]);
+
+  return (
+    <>
+      {dots.map((dot) => (
+        <View
+          key={dot.key}
+          style={{
+            position: "absolute",
+            left: dot.x,
+            top: dot.y,
+            width: 11,
+            height: 11,
+            borderRadius: 5.5,
+            backgroundColor: "rgba(0,0,0,0.22)",
+          }}
+        />
+      ))}
+    </>
+  );
 }
 
 export default function ReachScreen() {
@@ -693,16 +737,16 @@ export default function ReachScreen() {
                 width: BUTTON_SIZE - 24,
                 height: BUTTON_SIZE - 24,
                 borderRadius: (BUTTON_SIZE - 24) / 2,
-                backgroundColor: "#080808",
+                backgroundColor: "#040404",
                 shadowColor: "#000",
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.95,
-                shadowRadius: 6,
+                shadowRadius: 10,
                 elevation: 8,
               }}
             />
 
-            {/* === CONVEX BUTTON FACE === */}
+            {/* === STOPLIGHT LENS FACE === */}
             <View
               style={{
                 position: "absolute",
@@ -712,139 +756,67 @@ export default function ReachScreen() {
                 height: BUTTON_SIZE - 28,
                 borderRadius: (BUTTON_SIZE - 28) / 2,
                 overflow: "hidden",
+                backgroundColor: "#3d0000",
               }}
             >
-              {/* Base gradient: bright red top → deep crimson bottom */}
+              {/* Base: dark-edge radial glow — edges dark, center bright */}
               <LinearGradient
-                colors={["#ff4444", "#ee1515", "#cc0000", "#880000", "#4d0000"]}
-                locations={[0, 0.15, 0.45, 0.78, 1]}
+                colors={["#550000", "#aa0000", "#ee2200", "#ff5533", "#ff6644", "#ee2200", "#aa0000", "#550000"]}
+                locations={[0, 0.12, 0.28, 0.42, 0.5, 0.62, 0.82, 1]}
                 start={{ x: 0.5, y: 0 }}
                 end={{ x: 0.5, y: 1 }}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
               />
-
-              {/* Side curvature darkening (left + right edge falloff) */}
+              {/* Left/right edge darkening for spherical depth */}
               <LinearGradient
-                colors={["rgba(0,0,0,0.45)", "transparent", "rgba(0,0,0,0.45)"]}
-                locations={[0, 0.5, 1]}
+                colors={["rgba(0,0,0,0.65)", "rgba(0,0,0,0.1)", "transparent", "rgba(0,0,0,0.1)", "rgba(0,0,0,0.65)"]}
+                locations={[0, 0.18, 0.5, 0.82, 1]}
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+              />
+              {/* Honeycomb bump texture */}
+              <HoneycombDots size={BUTTON_SIZE - 28} />
+              {/* Center bloom — warm bright glow over texture */}
+              <View
                 style={{
                   position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
+                  top: (BUTTON_SIZE - 28) * 0.18,
+                  left: (BUTTON_SIZE - 28) * 0.18,
+                  width: (BUTTON_SIZE - 28) * 0.64,
+                  height: (BUTTON_SIZE - 28) * 0.64,
+                  borderRadius: (BUTTON_SIZE - 28) * 0.32,
+                  backgroundColor: "rgba(255,200,160,0.28)",
                 }}
               />
-
-              {/* Bottom curvature darkening */}
+              {/* Bright specular core */}
+              <View
+                style={{
+                  position: "absolute",
+                  top: (BUTTON_SIZE - 28) * 0.28,
+                  left: (BUTTON_SIZE - 28) * 0.28,
+                  width: (BUTTON_SIZE - 28) * 0.44,
+                  height: (BUTTON_SIZE - 28) * 0.44,
+                  borderRadius: (BUTTON_SIZE - 28) * 0.22,
+                  backgroundColor: "rgba(255,230,210,0.18)",
+                }}
+              />
+              {/* Top-left lens reflection streak */}
               <LinearGradient
-                colors={["transparent", "transparent", "rgba(0,0,0,0.55)"]}
+                colors={["rgba(255,255,255,0.22)", "rgba(255,255,255,0.06)", "transparent"]}
                 locations={[0, 0.4, 1]}
-                start={{ x: 0.5, y: 0 }}
-                end={{ x: 0.5, y: 1 }}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                }}
+                start={{ x: 0.1, y: 0 }}
+                end={{ x: 0.6, y: 0.6 }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
               />
-
-              {/* Main glossy highlight (large oval, glass/plastic surface) */}
+              {/* Hard dark vignette ring at very edge */}
               <View
                 style={{
                   position: "absolute",
-                  top: 5,
-                  left: (BUTTON_SIZE - 28) * 0.08,
-                  width: (BUTTON_SIZE - 28) * 0.84,
-                  height: (BUTTON_SIZE - 28) * 0.46,
-                  borderRadius: (BUTTON_SIZE - 28) * 0.4,
-                  overflow: "hidden",
-                }}
-              >
-                <LinearGradient
-                  colors={[
-                    "rgba(255,255,255,0.68)",
-                    "rgba(255,255,255,0.28)",
-                    "rgba(255,255,255,0.06)",
-                    "transparent",
-                  ]}
-                  locations={[0, 0.22, 0.6, 1]}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 1 }}
-                  style={{ width: "100%", height: "100%" }}
-                />
-              </View>
-
-              {/* Small bright specular hotspot */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 9,
-                  left: (BUTTON_SIZE - 28) * 0.28,
-                  width: (BUTTON_SIZE - 28) * 0.44,
-                  height: (BUTTON_SIZE - 28) * 0.19,
-                  borderRadius: (BUTTON_SIZE - 28) * 0.12,
-                  overflow: "hidden",
-                }}
-              >
-                <LinearGradient
-                  colors={[
-                    "rgba(255,255,255,0.95)",
-                    "rgba(255,255,255,0.45)",
-                    "transparent",
-                  ]}
-                  locations={[0, 0.3, 1]}
-                  start={{ x: 0.5, y: 0 }}
-                  end={{ x: 0.5, y: 1 }}
-                  style={{ width: "100%", height: "100%" }}
-                />
-              </View>
-
-              {/* Bottom rim warm bounce light */}
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 11,
-                  left: (BUTTON_SIZE - 28) * 0.28,
-                  width: (BUTTON_SIZE - 28) * 0.44,
-                  height: 10,
-                  borderRadius: 5,
-                  overflow: "hidden",
-                }}
-              >
-                <LinearGradient
-                  colors={[
-                    "transparent",
-                    "rgba(255,110,70,0.3)",
-                    "transparent",
-                  ]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={{ width: "100%", height: "100%" }}
-                />
-              </View>
-
-              {/* Inner edge shadow ring (convex rim depth) */}
-              <View
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
+                  top: 0, left: 0, right: 0, bottom: 0,
                   borderRadius: (BUTTON_SIZE - 28) / 2,
-                  borderWidth: 4,
-                  borderColor: "rgba(0,0,0,0.28)",
+                  borderWidth: 14,
+                  borderColor: "rgba(0,0,0,0.45)",
                 }}
               />
             </View>
