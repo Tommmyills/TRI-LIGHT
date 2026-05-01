@@ -1,4 +1,6 @@
-import "@vibecodeapp/proxy"; // DO NOT REMOVE OTHERWISE VIBECODE PROXY WILL NOT WORK
+if (process.env.ENVIRONMENT !== "production") {
+  await import("@vibecodeapp/proxy"); // Vibecode dev proxy — skip in production
+}
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import "./env";
