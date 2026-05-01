@@ -64,6 +64,12 @@ function RootLayoutNav() {
     return () => subscription.remove();
   }, [isLoading, session?.user?.id]);
 
+  useEffect(() => {
+    if (!isLoading) {
+      SplashScreen.hideAsync();
+    }
+  }, [isLoading]);
+
   if (isLoading) return null;
 
   return (

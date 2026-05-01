@@ -28,7 +28,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import * as SplashScreen from "expo-splash-screen";
 import * as Crypto from "expo-crypto";
 import { api } from "@/lib/api/api";
 import useReachStore from "@/lib/state/reach-store";
@@ -96,7 +95,6 @@ export default function ReachScreen() {
         const id = Crypto.randomUUID();
         setDeviceId(id);
       }
-      await SplashScreen.hideAsync();
     }
     init();
   }, [deviceId, setDeviceId]);
