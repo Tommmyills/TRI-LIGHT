@@ -1,7 +1,4 @@
 {
-  "buildCommand": "cd mobile && npx expo export --platform web",
-  "outputDirectory": "mobile/dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ]
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist"
 }
