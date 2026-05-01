@@ -1,4 +1,4 @@
-FROM oven/bun:1 AS base
+FROM oven/bun:1
 WORKDIR /app
 
 COPY package.json bun.lock* ./
@@ -8,4 +8,6 @@ COPY . .
 RUN bunx prisma generate
 
 EXPOSE 3000
-CMD ["sh", "scripts/start"]
+ENV NODE_ENV=production
+ENV ENVIRONMENT=production
+CMD ["sh", "-c", "bunx prisma db push --accept-data-loss && exec bun src/index.ts"]
