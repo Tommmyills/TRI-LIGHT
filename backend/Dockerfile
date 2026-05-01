@@ -8,4 +8,4 @@ COPY . .
 RUN bunx prisma generate
 
 EXPOSE 3000
-CMD ["bun", "scripts/start"]
+CMD ["sh", "scripts/start"]
