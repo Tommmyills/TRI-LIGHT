@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   FlatList,
   ActivityIndicator,
   ScrollView,
+  AppState,
 } from "react-native";
 import { router } from "expo-router";
 import * as Contacts from "expo-contacts";
@@ -107,25 +108,45 @@ export default function ReachScreen() {
   }, []);
 
   // Load persons for logged-in user (syncs server state into local store)
-  useEffect(() => {
-    async function loadPersonsForUser() {
-      if (session?.user) {
-        try {
-          const savedPersons = await api.get<PersonWithConsent[]>("/api/person/for-user");
-          if (savedPersons && savedPersons.length > 0) {
-            savedPersons.forEach((p) => {
-              setPerson(p, p.slot as 1 | 2 | 3);
-            });
-            // Update consent status for slot 1
-            const slot1 = savedPersons.find(p => p.slot === 1);
-            if (slot1) setConsentStatus(slot1.consentStatus ?? 'none');
-          }
-        } catch {
-          // ignore
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const loadPersonsForUser = useCallback(async () => {
+    if (!session?.user) return;
+    try {
+      const savedPersons = await api.get<PersonWithConsent[]>("/api/person/for-user");
+      if (savedPersons && savedPersons.length > 0) {
+        savedPersons.forEach((p) => {
+          setPerson(p, p.slot as 1 | 2 | 3);
+        });
+        const slot1 = savedPersons.find(p => p.slot === 1);
+        if (slot1) setConsentStatus(slot1.consentStatus ?? 'none');
+        // Stop polling once all contacts are confirmed or declined (no more pending)
+        const hasPending = savedPersons.some(p => p.consentStatus === 'pending');
+        if (!hasPending && pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
         }
       }
+    } catch {
+      // ignore
     }
+  }, [session?.user?.id]);
+
+  useEffect(() => {
     loadPersonsForUser();
+
+    // Poll every 8 seconds to catch when a contact accepts
+    pollIntervalRef.current = setInterval(loadPersonsForUser, 8000);
+
+    // Also refresh when app comes back to foreground
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") loadPersonsForUser();
+    });
+
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      sub.remove();
+    };
   }, [session?.user?.id]);
 
   // Heartbeat pulse animation

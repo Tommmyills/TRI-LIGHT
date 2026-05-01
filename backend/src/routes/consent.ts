@@ -41,26 +41,44 @@ function consentPage(senderName: string, token: string): string {
 </html>`;
 }
 
-function statusPage(title: string, message: string): string {
+function statusPage(title: string, message: string, isSuccess = false): string {
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TRI-LIGHT APP</title>
+  <title>R.E.A.C.H.</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0a0a; color: #fff; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-    .card { background: #1a1a1a; border-radius: 20px; padding: 32px 24px; max-width: 400px; width: 100%; text-align: center; }
-    .logo { font-size: 14px; font-weight: 700; letter-spacing: 3px; color: #888; margin-bottom: 24px; }
-    h1 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
-    p { color: #999; font-size: 15px; line-height: 1.6; }
+    .card { background: #1a1a1a; border-radius: 20px; padding: 36px 28px; max-width: 400px; width: 100%; text-align: center; }
+    .logo { font-size: 22px; font-weight: 900; letter-spacing: 8px; color: #fff; margin-bottom: 4px; text-shadow: 0 0 18px rgba(204,0,0,0.6); }
+    .logo-sub { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: rgba(255,255,255,0.25); text-transform: uppercase; margin-bottom: 28px; }
+    .icon { font-size: 52px; margin-bottom: 16px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 12px; color: ${isSuccess ? '#22c55e' : '#fff'}; }
+    p { color: #999; font-size: 15px; line-height: 1.6; margin-bottom: 0; }
+    .steps { background: #111; border-radius: 14px; padding: 20px; margin-top: 24px; text-align: left; }
+    .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+    .step:last-child { margin-bottom: 0; }
+    .step-num { background: #cc0000; color: #fff; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+    .step-text { color: #ccc; font-size: 14px; line-height: 1.5; }
+    .close-note { margin-top: 24px; font-size: 13px; color: #444; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">TRI-LIGHT APP</div>
+    <div class="logo">R.E.A.C.H.</div>
+    <div class="logo-sub">Realtime Engagement &amp; Accountability Compliance Hub</div>
+    <div class="icon">${isSuccess ? '✅' : '❌'}</div>
     <h1>${title}</h1>
     <p>${message}</p>
+    ${isSuccess ? `
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><div class="step-text"><strong style="color:#fff">Watch your email.</strong> When your contact needs support, you'll receive an email with a Join Call button.</div></div>
+      <div class="step"><div class="step-num">2</div><div class="step-text"><strong style="color:#fff">Respond quickly.</strong> Tap the Join Call link in that email to connect right away.</div></div>
+      <div class="step"><div class="step-num">3</div><div class="step-text"><strong style="color:#fff">Stay accessible.</strong> Keep notifications on so you don't miss a message when it matters most.</div></div>
+    </div>
+    <p class="close-note">You can close this page — you're all set.</p>
+    ` : ''}
   </div>
 </body>
 </html>`;
@@ -112,8 +130,9 @@ consentRouter.post("/:token/accept", async (c) => {
 
   return c.html(
     statusPage(
-      "You're all set!",
-      `When ${invitation.senderName} needs you, you'll get another email with a Join Call button to start a video call immediately. Stay close to your phone.`
+      "You're confirmed!",
+      `You're now an accountability contact for ${invitation.senderName}. Here's what happens next:`,
+      true
     )
   );
 });
