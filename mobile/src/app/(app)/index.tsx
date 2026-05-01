@@ -33,7 +33,8 @@ import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { api } from "@/lib/api/api";
 import useReachStore from "@/lib/state/reach-store";
-import { Check, Settings, Plus } from "lucide-react-native";
+import { Check, Settings, Plus, ChevronUp } from "lucide-react-native";
+import { BlurView } from "expo-blur";
 import { authClient } from "@/lib/auth/auth-client";
 import { useSession, useInvalidateSession } from "@/lib/auth/use-session";
 
@@ -73,6 +74,7 @@ export default function ReachScreen() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [activeSlot, setActiveSlot] = useState<1 | 2 | 3>(1);
   const [resendingSlot, setResendingSlot] = useState<number | null>(null);
+  const [showContactsDrawer, setShowContactsDrawer] = useState(false);
 
   // Contact picker states
   const [showContactPicker, setShowContactPicker] = useState(false);
@@ -93,6 +95,7 @@ export default function ReachScreen() {
   const outerPulseScale = useSharedValue(1);
   const outerPulseOpacity = useSharedValue(0);
   const sentOpacity = useSharedValue(0);
+  const drawerSlide = useSharedValue(0);
 
   // Generate device IDs on mount
   useEffect(() => {
@@ -233,6 +236,10 @@ export default function ReachScreen() {
     transform: [{ translateY: interpolate(sentOpacity.value, [0, 1], [10, 0]) }],
   }));
 
+  const drawerAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(drawerSlide.value, [0, 1], [400, 0]) }],
+  }));
+
   // Settings modal
   const handleOpenSettings = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -243,6 +250,16 @@ export default function ReachScreen() {
   const handleCloseSettings = useCallback(() => {
     settingsModalSlide.value = withTiming(0, { duration: 250 });
     setTimeout(() => setShowSettingsModal(false), 260);
+  }, []);
+
+  const handleOpenContactsDrawer = useCallback(() => {
+    setShowContactsDrawer(true);
+    drawerSlide.value = withSpring(1, { damping: 20, stiffness: 200 });
+  }, []);
+
+  const handleCloseContactsDrawer = useCallback(() => {
+    drawerSlide.value = withTiming(0, { duration: 250 });
+    setTimeout(() => setShowContactsDrawer(false), 260);
   }, []);
 
   const handleOpenSlotModal = useCallback((slot: 1 | 2 | 3, prefillName?: string, prefillPhone?: string) => {
@@ -847,94 +864,32 @@ export default function ReachScreen() {
           TRI-LIGHT
         </Text>
 
-        {/* 3 Contact Slots */}
-        <View style={{ flexDirection: "row", marginTop: 24, gap: 8, paddingHorizontal: 16 }}>
-          {([1, 2, 3] as const).map((slot) => {
-            const p = persons[slot - 1];
-            const isPrimary = slot === 1;
-            const isEmpty = p === null;
-
-            if (isEmpty) {
-              return (
-                <Pressable
-                  key={slot}
-                  onPress={() => handleOpenSlotModal(slot)}
-                  testID={`contact-slot-${slot}-empty`}
-                  style={({ pressed }) => ({
-                    width: 100,
-                    height: 72,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderStyle: "dashed",
-                    borderColor: isPrimary ? "#333" : "#2a2a2a",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 4,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Plus size={16} color={isPrimary ? "#444" : "#333"} />
-                  <Text style={{ fontSize: 11, color: isPrimary ? "#444" : "#333", fontWeight: "500" }}>
-                    {isPrimary ? "Add person" : "Add backup"}
-                  </Text>
-                </Pressable>
-              );
-            }
-
-            const statusColor =
-              p.consentStatus === 'confirmed' ? "#00b450" :
-              p.consentStatus === 'pending' ? "#ffc800" :
-              p.consentStatus === 'declined' ? "#b45309" : "#555";
-
-            return (
-              <Pressable
-                key={slot}
-                onPress={() => handleOpenSlotModal(slot, p.name, p.phone)}
-                testID={`contact-slot-${slot}-filled`}
-                style={({ pressed }) => ({
-                  width: 100,
-                  height: 72,
-                  borderRadius: 14,
-                  backgroundColor: "#111",
-                  paddingHorizontal: 10,
-                  paddingVertical: 10,
-                  justifyContent: "space-between",
-                  opacity: pressed ? 0.7 : 1,
-                })}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={{ fontSize: 13, color: "#ffffff", fontWeight: "700" }}
-                >
-                  {p.name}
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
-                  <Text style={{ fontSize: 10, color: statusColor, fontWeight: "600" }}>
-                    {p.consentStatus === 'confirmed' ? "Active" :
-                     p.consentStatus === 'pending' ? "Pending" :
-                     p.consentStatus === 'declined' ? "Declined" : "Unknown"}
-                  </Text>
-                </View>
-              </Pressable>
-            );
+        {/* Contacts swipe indicator */}
+        <Pressable
+          onPress={handleOpenContactsDrawer}
+          testID="contacts-swipe-indicator"
+          style={({ pressed }) => ({
+            alignItems: "center",
+            marginTop: 32,
+            opacity: pressed ? 0.5 : 1,
+            paddingVertical: 8,
+            paddingHorizontal: 24,
           })}
-        </View>
-
-        {/* Transient status message (invitation sent / consent pending resend) */}
-        {statusMessage ? (
+        >
+          <ChevronUp size={14} color="#333" strokeWidth={2} />
           <Text
             style={{
-              marginTop: 16,
-              fontSize: 13,
-              color: "#cc0000",
-              textAlign: "center",
-              paddingHorizontal: 32,
+              fontSize: 10,
+              fontWeight: "600",
+              color: "#333",
+              letterSpacing: 3,
+              textTransform: "uppercase",
+              marginTop: 3,
             }}
           >
-            {statusMessage}
+            contacts
           </Text>
-        ) : null}
+        </Pressable>
       </View>
 
       {/* Registration / Edit Person Modal */}
@@ -1297,6 +1252,191 @@ export default function ReachScreen() {
           </Text>
         </Animated.View>
       ) : null}
+
+      {/* Contacts Drawer */}
+      {showContactsDrawer ? (
+        <Modal
+          visible={showContactsDrawer}
+          transparent
+          animationType="none"
+          onRequestClose={handleCloseContactsDrawer}
+        >
+          <Pressable
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
+            onPress={handleCloseContactsDrawer}
+          />
+          <Animated.View
+            style={[
+              drawerAnimatedStyle,
+              {
+                backgroundColor: "#111111",
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
+                paddingHorizontal: 24,
+                paddingTop: 20,
+                paddingBottom: Platform.OS === "ios" ? 48 : 28,
+              },
+            ]}
+          >
+            {/* Handle */}
+            <View style={{ alignItems: "center", marginBottom: 20 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#282828" }} />
+            </View>
+
+            <Text style={{ fontSize: 13, fontWeight: "700", color: "#333", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 16 }}>
+              My Contacts
+            </Text>
+
+            {([1, 2, 3] as const).map((slot) => {
+              const p = persons[slot - 1];
+              const isPrimary = slot === 1;
+
+              if (!p) {
+                return (
+                  <Pressable
+                    key={slot}
+                    onPress={() => { handleCloseContactsDrawer(); setTimeout(() => handleOpenSlotModal(slot), 300); }}
+                    testID={`drawer-slot-${slot}-empty`}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      paddingHorizontal: 4,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#1a1a1a",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 18,
+                      borderWidth: 1, borderStyle: "dashed",
+                      borderColor: isPrimary ? "#333" : "#2a2a2a",
+                      alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Plus size={14} color={isPrimary ? "#444" : "#333"} />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: "600", color: isPrimary ? "#cc0000" : "#444" }}>
+                        {isPrimary ? "Add primary contact" : "+ Add backup"}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: "#333", marginTop: 2 }}>
+                        {isPrimary ? "Required to use REACH" : `Slot ${slot}`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              }
+
+              const statusColor =
+                p.consentStatus === 'confirmed' ? "#00b450" :
+                p.consentStatus === 'pending' ? "#ffc800" :
+                p.consentStatus === 'declined' ? "#b45309" : "#555";
+
+              return (
+                <Pressable
+                  key={slot}
+                  onPress={() => { handleCloseContactsDrawer(); setTimeout(() => handleOpenSlotModal(slot, p.name, p.phone), 300); }}
+                  testID={`drawer-slot-${slot}-filled`}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    paddingHorizontal: 4,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#1a1a1a",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    opacity: pressed ? 0.7 : 1,
+                  })}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                    <View style={{
+                      width: 36, height: 36, borderRadius: 18,
+                      backgroundColor: "#1a1a1a",
+                      alignItems: "center", justifyContent: "center",
+                    }}>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: "#ffffff" }}>
+                        {p.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: "#ffffff" }} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: "#444", marginTop: 1 }}>
+                        {slotLabels[slot]}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: statusColor }} />
+                    <Text style={{ fontSize: 11, color: statusColor, fontWeight: "600" }}>
+                      {p.consentStatus === 'confirmed' ? "Active" :
+                       p.consentStatus === 'pending' ? "Pending" :
+                       p.consentStatus === 'declined' ? "Declined" : "Unknown"}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        </Modal>
+      ) : null}
+
+      {/* R.E.A.C.H. footer branding */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: 38,
+          paddingTop: 18,
+          alignItems: "center",
+        }}
+      >
+        <BlurView intensity={30} tint="dark" style={{ borderRadius: 0, width: "100%", alignItems: "center", paddingVertical: 16 }}>
+          <View
+            style={{
+              width: 32,
+              height: 1,
+              backgroundColor: "#cc0000",
+              marginBottom: 12,
+              shadowColor: "#cc0000",
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 6,
+            }}
+          />
+          <Text
+            style={{
+              fontSize: 30,
+              fontWeight: "900",
+              letterSpacing: 12,
+              color: "#ffffff",
+              textShadowColor: "rgba(204,0,0,0.7)",
+              textShadowOffset: { width: 0, height: 0 },
+              textShadowRadius: 20,
+            }}
+          >
+            R.E.A.C.H.
+          </Text>
+          <Text
+            style={{
+              fontSize: 8.5,
+              fontWeight: "700",
+              letterSpacing: 2,
+              color: "rgba(255,255,255,0.3)",
+              textTransform: "uppercase",
+              marginTop: 6,
+              textAlign: "center",
+              paddingHorizontal: 24,
+            }}
+          >
+            REALTIME ENGAGEMENT & ACCOUNTABILITY COMPLIANCE HUB
+          </Text>
+        </BlurView>
+      </View>
 
       {/* Contact Picker Modal */}
       <Modal
