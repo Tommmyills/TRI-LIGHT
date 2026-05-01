@@ -12,6 +12,7 @@ import {
 import { Eye, EyeOff } from "lucide-react-native";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
 import { authClient } from "@/lib/auth/auth-client";
 import { useInvalidateSession } from "@/lib/auth/use-session";
@@ -60,7 +61,7 @@ export default function SignUpScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 28 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 28, paddingBottom: 120 }}
           keyboardShouldPersistTaps="handled"
         >
           {/* Title */}
@@ -171,6 +172,61 @@ export default function SignUpScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* R.E.A.C.H. footer branding */}
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          paddingBottom: 38,
+          paddingTop: 18,
+          alignItems: "center",
+        }}
+      >
+        <BlurView intensity={30} tint="dark" style={{ borderRadius: 0, width: "100%", alignItems: "center", paddingVertical: 16 }}>
+          <View
+            style={{
+              width: 32,
+              height: 1,
+              backgroundColor: "#cc0000",
+              marginBottom: 12,
+              shadowColor: "#cc0000",
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 6,
+            }}
+          />
+          <Text
+            style={{
+              fontSize: 30,
+              fontWeight: "900",
+              letterSpacing: 12,
+              color: "#ffffff",
+              textShadowColor: "rgba(204,0,0,0.7)",
+              textShadowOffset: { width: 0, height: 0 },
+              textShadowRadius: 20,
+            }}
+          >
+            R.E.A.C.H.
+          </Text>
+          <Text
+            style={{
+              fontSize: 8.5,
+              fontWeight: "700",
+              letterSpacing: 2,
+              color: "rgba(255,255,255,0.3)",
+              textTransform: "uppercase",
+              marginTop: 6,
+              textAlign: "center",
+              paddingHorizontal: 24,
+            }}
+          >
+            REALTIME ENGAGEMENT & ACCOUNTABILITY COMPLIANCE HUB
+          </Text>
+        </BlurView>
+      </View>
     </View>
   );
 }
