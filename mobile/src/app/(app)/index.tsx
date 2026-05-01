@@ -284,6 +284,10 @@ export default function ReachScreen() {
     transform: [{ translateY: interpolate(drawerSlide.value, [0, 1], [400, 0]) }],
   }));
 
+  const lensFlashStyle = useAnimatedStyle(() => ({
+    opacity: buttonPressed.value * 0.6,
+  }));
+
   // Settings modal
   const handleOpenSettings = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -632,7 +636,7 @@ export default function ReachScreen() {
                 width: BUTTON_SIZE,
                 height: BUTTON_SIZE,
                 borderRadius: BUTTON_SIZE / 2,
-                opacity: reaching ? 0.75 : 1,
+                opacity: 1,
               },
             ]}
           >
@@ -818,6 +822,18 @@ export default function ReachScreen() {
                   borderWidth: 14,
                   borderColor: "rgba(0,0,0,0.45)",
                 }}
+              />
+              {/* Press flash — lens lights up bright on tap */}
+              <Animated.View
+                style={[
+                  lensFlashStyle,
+                  {
+                    position: "absolute",
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    borderRadius: (BUTTON_SIZE - 28) / 2,
+                    backgroundColor: "rgba(255,160,120,0.85)",
+                  },
+                ]}
               />
             </View>
           </Animated.View>
