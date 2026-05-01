@@ -441,12 +441,13 @@ export default function ReachScreen() {
           const primaryPerson = persons[0];
           setStatusMessage(
             primaryPerson
-              ? `Invitation resent to ${primaryPerson.name}. Ask them to check their messages.`
-              : 'Invitations resent. Ask your contacts to check their messages.'
+              ? `${primaryPerson.name} hasn't confirmed yet. Invitation resent — ask them to check their messages.`
+              : 'Your contact hasn\'t confirmed yet. Invitation resent — ask them to check their messages.'
           );
-          setTimeout(() => setStatusMessage(null), 4000);
+          setTimeout(() => setStatusMessage(null), 5000);
         } else {
-          Alert.alert("Error", "Could not reach. Please try again.");
+          setStatusMessage("Could not reach. Please check your connection and try again.");
+          setTimeout(() => setStatusMessage(null), 5000);
         }
       } finally {
         setReaching(false);
@@ -1239,6 +1240,28 @@ export default function ReachScreen() {
             Video call started
           </Text>
         </Animated.View>
+      ) : null}
+
+      {/* Status message (consent pending, invitation resent, etc.) */}
+      {statusMessage ? (
+        <View
+          style={{
+            position: "absolute",
+            bottom: 56,
+            left: 24,
+            right: 24,
+            backgroundColor: "#111",
+            borderRadius: 18,
+            padding: 22,
+            borderWidth: 1,
+            borderColor: "#333",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600", textAlign: "center", lineHeight: 22 }}>
+            {statusMessage}
+          </Text>
+        </View>
       ) : null}
 
       {/* Contacts Drawer */}

@@ -51,6 +51,12 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// Global error handler — always return JSON
+app.onError((err, c) => {
+  console.error("Unhandled error:", err);
+  return c.json({ error: { message: "Internal server error", code: "INTERNAL_ERROR" } }, 500);
+});
+
 // Health check
 app.get("/health", (c) => c.json({ status: "ok" }));
 
