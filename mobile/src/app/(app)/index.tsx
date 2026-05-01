@@ -11,6 +11,7 @@ import {
   Alert,
   FlatList,
   ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { router } from "expo-router";
 import * as Contacts from "expo-contacts";
@@ -31,25 +32,27 @@ import * as Haptics from "expo-haptics";
 import * as Crypto from "expo-crypto";
 import { api } from "@/lib/api/api";
 import useReachStore from "@/lib/state/reach-store";
-import { Check, Settings } from "lucide-react-native";
+import { Check, Settings, Plus } from "lucide-react-native";
 import { authClient } from "@/lib/auth/auth-client";
 import { useSession, useInvalidateSession } from "@/lib/auth/use-session";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const BUTTON_SIZE = Math.min(SCREEN_WIDTH * 0.55, 240);
 
-interface Person {
+interface PersonWithConsent {
   id: string;
   name: string;
   phone: string;
   deviceId: string;
+  slot: number;
   consentStatus?: 'confirmed' | 'pending' | 'declined' | 'none';
 }
 
 export default function ReachScreen() {
-  const person = useReachStore((s) => s.person);
-  const deviceId = useReachStore((s) => s.deviceId);
+  const persons = useReachStore((s) => s.persons);
+  const deviceIds = useReachStore((s) => s.deviceIds);
   const setPerson = useReachStore((s) => s.setPerson);
+  const removePerson = useReachStore((s) => s.removePerson);
   const setDeviceId = useReachStore((s) => s.setDeviceId);
 
   const { data: session } = useSession();
@@ -67,6 +70,8 @@ export default function ReachScreen() {
   const [reaching, setReaching] = useState(false);
   const [consentStatus, setConsentStatus] = useState<'confirmed' | 'pending' | 'declined' | 'none' | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [activeSlot, setActiveSlot] = useState<1 | 2 | 3>(1);
+  const [resendingSlot, setResendingSlot] = useState<number | null>(null);
 
   // Contact picker states
   const [showContactPicker, setShowContactPicker] = useState(false);
@@ -88,33 +93,39 @@ export default function ReachScreen() {
   const outerPulseOpacity = useSharedValue(0);
   const sentOpacity = useSharedValue(0);
 
-  // Generate device ID on mount
+  // Generate device IDs on mount
   useEffect(() => {
     async function init() {
-      if (!deviceId) {
-        const id = Crypto.randomUUID();
-        setDeviceId(id);
-      }
+      const currentIds = useReachStore.getState().deviceIds;
+      const updates: Array<{ id: string; slot: 1 | 2 | 3 }> = [];
+      currentIds.forEach((id, i) => {
+        if (!id) updates.push({ id: Crypto.randomUUID(), slot: (i + 1) as 1 | 2 | 3 });
+      });
+      updates.forEach(({ id, slot }) => setDeviceId(id, slot));
     }
     init();
-  }, [deviceId, setDeviceId]);
+  }, []);
 
-  // Load person for logged-in user (syncs server state into local store)
+  // Load persons for logged-in user (syncs server state into local store)
   useEffect(() => {
-    async function loadPersonForUser() {
+    async function loadPersonsForUser() {
       if (session?.user) {
         try {
-          const savedPerson = await api.get<Person | null>("/api/person/for-user");
-          if (savedPerson) {
-            setPerson(savedPerson);
-            setConsentStatus(savedPerson.consentStatus ?? 'none');
+          const savedPersons = await api.get<PersonWithConsent[]>("/api/person/for-user");
+          if (savedPersons && savedPersons.length > 0) {
+            savedPersons.forEach((p) => {
+              setPerson(p, p.slot as 1 | 2 | 3);
+            });
+            // Update consent status for slot 1
+            const slot1 = savedPersons.find(p => p.slot === 1);
+            if (slot1) setConsentStatus(slot1.consentStatus ?? 'none');
           }
         } catch {
           // ignore
         }
       }
     }
-    loadPersonForUser();
+    loadPersonsForUser();
   }, [session?.user?.id]);
 
   // Heartbeat pulse animation
@@ -213,15 +224,60 @@ export default function ReachScreen() {
     setTimeout(() => setShowSettingsModal(false), 260);
   }, []);
 
-  const handleChangeMyPerson = useCallback(() => {
+  const handleOpenSlotModal = useCallback((slot: 1 | 2 | 3, prefillName?: string, prefillPhone?: string) => {
+    setActiveSlot(slot);
+    setName(prefillName ?? "");
+    setPhone(prefillPhone ?? "");
+    setShowModal(true);
+    modalSlide.value = withSpring(1, { damping: 20, stiffness: 200 });
+  }, [modalSlide]);
+
+  const handleEditFromSettings = useCallback((slot: 1 | 2 | 3) => {
+    const p = persons[slot - 1];
     handleCloseSettings();
     setTimeout(() => {
-      setName(person?.name ?? "");
-      setPhone(person?.phone ?? "");
-      setShowModal(true);
-      modalSlide.value = withSpring(1, { damping: 20, stiffness: 200 });
+      handleOpenSlotModal(slot, p?.name ?? "", p?.phone ?? "");
     }, 300);
-  }, [person, handleCloseSettings]);
+  }, [persons, handleCloseSettings, handleOpenSlotModal]);
+
+  const handleRemoveFromSettings = useCallback((slot: 1 | 2 | 3) => {
+    const p = persons[slot - 1];
+    if (!p) return;
+    Alert.alert(
+      "Remove Contact",
+      `Remove ${p.name} from slot ${slot}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/api/person/slot/${slot}`);
+            } catch {
+              // ignore — remove locally regardless
+            }
+            removePerson(slot);
+            if (slot === 1) setConsentStatus(null);
+          },
+        },
+      ]
+    );
+  }, [persons, removePerson]);
+
+  const handleResend = useCallback(async (slot: 1 | 2 | 3) => {
+    setResendingSlot(slot);
+    try {
+      await api.post(`/api/person/resend/${slot}`, {});
+      const p = persons[slot - 1];
+      setStatusMessage(`Invitation resent to ${p?.name ?? 'your contact'}.`);
+      setTimeout(() => setStatusMessage(null), 3000);
+    } catch {
+      Alert.alert("Error", "Could not resend invitation. Please try again.");
+    } finally {
+      setResendingSlot(null);
+    }
+  }, [persons]);
 
   const handleSignOut = useCallback(() => {
     handleCloseSettings();
@@ -251,9 +307,12 @@ export default function ReachScreen() {
       withTiming(0, { duration: 200 })
     );
 
-    if (!person) {
-      // No person saved — open registration modal
+    const hasAnyPerson = persons.some(p => p !== null);
+
+    if (!hasAnyPerson) {
+      // No contacts at all — open modal for slot 1
       setTimeout(() => {
+        setActiveSlot(1);
         setName("");
         setPhone("");
         setShowModal(true);
@@ -293,7 +352,12 @@ export default function ReachScreen() {
       } catch (err: unknown) {
         const code = (err as { code?: string })?.code;
         if (code === 'CONSENT_PENDING') {
-          setStatusMessage(`Invitation resent to ${person?.name ?? 'your person'}. Ask them to check their messages.`);
+          const primaryPerson = persons[0];
+          setStatusMessage(
+            primaryPerson
+              ? `Invitation resent to ${primaryPerson.name}. Ask them to check their messages.`
+              : 'Invitations resent. Ask your contacts to check their messages.'
+          );
           setTimeout(() => setStatusMessage(null), 4000);
         } else {
           Alert.alert("Error", "Could not reach. Please try again.");
@@ -302,7 +366,7 @@ export default function ReachScreen() {
         setReaching(false);
       }
     }
-  }, [person, reaching, buttonPressed, modalSlide, glowOpacity, sentOpacity]);
+  }, [persons, reaching, buttonPressed, modalSlide, glowOpacity, sentOpacity]);
 
   const handleSavePerson = useCallback(async () => {
     if (!name.trim() || !phone.trim()) {
@@ -314,16 +378,16 @@ export default function ReachScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
-      const currentDeviceId = useReachStore.getState().deviceId;
-      const savedPerson = await api.post<Person>("/api/person", {
+      const savedPerson = await api.post<PersonWithConsent>("/api/person", {
         name: name.trim(),
         phone: phone.trim(),
-        deviceId: currentDeviceId,
+        deviceId: useReachStore.getState().deviceIds[activeSlot - 1],
+        slot: activeSlot,
       });
 
       if (savedPerson) {
-        setPerson(savedPerson);
-        setConsentStatus(savedPerson.consentStatus ?? 'pending');
+        setPerson(savedPerson, activeSlot);
+        if (activeSlot === 1) setConsentStatus(savedPerson.consentStatus ?? 'pending');
       }
 
       const savedName = name.trim();
@@ -355,7 +419,7 @@ export default function ReachScreen() {
     } finally {
       setSaving(false);
     }
-  }, [name, phone, setPerson, modalSlide, checkScale, checkOpacity, confirmTextOpacity]);
+  }, [name, phone, activeSlot, setPerson, modalSlide, checkScale, checkOpacity, confirmTextOpacity]);
 
   const handleCloseModal = useCallback(() => {
     modalSlide.value = withTiming(0, { duration: 300 });
@@ -398,6 +462,22 @@ export default function ReachScreen() {
     setContactSearch("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
+
+  // Helper for consent status badge
+  const renderConsentBadge = (status: string | undefined) => {
+    if (status === 'confirmed') {
+      return <Text style={{ fontSize: 11, color: "#00b450", fontWeight: "700" }}>Confirmed</Text>;
+    }
+    if (status === 'pending') {
+      return <Text style={{ fontSize: 11, color: "#ffc800", fontWeight: "700" }}>Pending</Text>;
+    }
+    if (status === 'declined') {
+      return <Text style={{ fontSize: 11, color: "#b45309", fontWeight: "700" }}>Declined</Text>;
+    }
+    return null;
+  };
+
+  const slotLabels: Record<1 | 2 | 3, string> = { 1: "Primary", 2: "Backup 2", 3: "Backup 3" };
 
   return (
     <View className="flex-1" style={{ backgroundColor: "#0a0a0a" }}>
@@ -733,7 +813,7 @@ export default function ReachScreen() {
           </Animated.View>
         </Pressable>
 
-        {/* REACH text */}
+        {/* TRI-LIGHT text */}
         <Text
           style={{
             marginTop: 40,
@@ -746,32 +826,79 @@ export default function ReachScreen() {
           TRI-LIGHT
         </Text>
 
-        {/* Consent status message */}
-        {consentStatus === 'pending' && person ? (
-          <Text
-            style={{
-              marginTop: 16,
-              fontSize: 13,
-              color: "#555",
-              textAlign: "center",
-              paddingHorizontal: 32,
-            }}
-          >
-            Waiting for {person.name} to accept your invitation
-          </Text>
-        ) : consentStatus === 'declined' && person ? (
-          <Text
-            style={{
-              marginTop: 16,
-              fontSize: 13,
-              color: "#b45309",
-              textAlign: "center",
-              paddingHorizontal: 32,
-            }}
-          >
-            {person.name} declined. Tap the gear icon to change your person.
-          </Text>
-        ) : null}
+        {/* 3 Contact Slots */}
+        <View style={{ flexDirection: "row", marginTop: 24, gap: 8, paddingHorizontal: 16 }}>
+          {([1, 2, 3] as const).map((slot) => {
+            const p = persons[slot - 1];
+            const isPrimary = slot === 1;
+            const isEmpty = p === null;
+
+            if (isEmpty) {
+              return (
+                <Pressable
+                  key={slot}
+                  onPress={() => handleOpenSlotModal(slot)}
+                  testID={`contact-slot-${slot}-empty`}
+                  style={({ pressed }) => ({
+                    width: 100,
+                    height: 72,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderStyle: "dashed",
+                    borderColor: isPrimary ? "#333" : "#2a2a2a",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Plus size={16} color={isPrimary ? "#444" : "#333"} />
+                  <Text style={{ fontSize: 11, color: isPrimary ? "#444" : "#333", fontWeight: "500" }}>
+                    {isPrimary ? "Add person" : "Add backup"}
+                  </Text>
+                </Pressable>
+              );
+            }
+
+            const statusColor =
+              p.consentStatus === 'confirmed' ? "#00b450" :
+              p.consentStatus === 'pending' ? "#ffc800" :
+              p.consentStatus === 'declined' ? "#b45309" : "#555";
+
+            return (
+              <Pressable
+                key={slot}
+                onPress={() => handleOpenSlotModal(slot, p.name, p.phone)}
+                testID={`contact-slot-${slot}-filled`}
+                style={({ pressed }) => ({
+                  width: 100,
+                  height: 72,
+                  borderRadius: 14,
+                  backgroundColor: "#111",
+                  paddingHorizontal: 10,
+                  paddingVertical: 10,
+                  justifyContent: "space-between",
+                  opacity: pressed ? 0.7 : 1,
+                })}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{ fontSize: 13, color: "#ffffff", fontWeight: "700" }}
+                >
+                  {p.name}
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} />
+                  <Text style={{ fontSize: 10, color: statusColor, fontWeight: "600" }}>
+                    {p.consentStatus === 'confirmed' ? "Active" :
+                     p.consentStatus === 'pending' ? "Pending" :
+                     p.consentStatus === 'declined' ? "Declined" : "Unknown"}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* Transient status message (invitation sent / consent pending resend) */}
         {statusMessage ? (
@@ -824,10 +951,14 @@ export default function ReachScreen() {
             </View>
 
             <Text style={{ fontSize: 28, fontWeight: "800", color: "#ffffff", marginBottom: 8 }}>
-              {person ? "Change my person" : "Who's your person?"}
+              {persons[activeSlot - 1]
+                ? (activeSlot === 1 ? "Change my person" : "Edit backup contact")
+                : (activeSlot === 1 ? "Who's your person?" : "Add a backup person")}
             </Text>
             <Text style={{ fontSize: 16, color: "#666666", marginBottom: 20, lineHeight: 22 }}>
-              {person ? "Update the name or email." : "The one who picks up."}
+              {activeSlot === 1
+                ? (persons[0] ? "Update the name or email." : "The one who picks up.")
+                : "A backup who can also receive your REACH."}
             </Text>
 
             {/* Choose from Contacts */}
@@ -893,7 +1024,7 @@ export default function ReachScreen() {
                 style={{ borderRadius: 16, paddingVertical: 18, alignItems: "center" }}
               >
                 <Text style={{ fontSize: 17, fontWeight: "800", color: "#fff", letterSpacing: 0.5 }}>
-                  {saving ? "SAVING..." : "SAVE MY PERSON"}
+                  {saving ? "SAVING..." : activeSlot === 1 ? "SAVE MY PERSON" : "SAVE BACKUP"}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -922,64 +1053,159 @@ export default function ReachScreen() {
               paddingHorizontal: 24,
               paddingTop: 28,
               paddingBottom: Platform.OS === "ios" ? 48 : 28,
+              maxHeight: "80%",
             },
           ]}
         >
-          {/* Handle */}
-          <View style={{ alignItems: "center", marginBottom: 28 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#282828" }} />
-          </View>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            {/* Handle */}
+            <View style={{ alignItems: "center", marginBottom: 28 }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#282828" }} />
+            </View>
 
-          {/* Change My Person */}
-          <Pressable
-            onPress={handleChangeMyPerson}
-            style={({ pressed }) => ({
-              paddingVertical: 18,
-              paddingHorizontal: 4,
-              borderBottomWidth: 1,
-              borderBottomColor: "#1a1a1a",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "600", color: "#ffffff" }}>
-              Change My Person
+            {/* MY PEOPLE section */}
+            <Text style={{ fontSize: 11, fontWeight: "700", color: "#444", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>
+              My People
             </Text>
-            {person ? (
-              <Text style={{ fontSize: 14, color: "#444", marginTop: 3 }}>
-                Currently: {person.name}
+
+            {([1, 2, 3] as const).map((slot) => {
+              const p = persons[slot - 1];
+              const isPrimary = slot === 1;
+
+              if (!p) {
+                return (
+                  <Pressable
+                    key={slot}
+                    onPress={() => handleEditFromSettings(slot)}
+                    testID={`settings-slot-${slot}-empty`}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      paddingHorizontal: 4,
+                      borderBottomWidth: 1,
+                      borderBottomColor: "#1a1a1a",
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: isPrimary ? "#cc0000" : "#555" }}>
+                      {isPrimary ? "Set primary contact" : "+ Add backup person"}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: "#333", marginTop: 2 }}>
+                      {isPrimary ? "Required to use REACH" : `Slot ${slot} — backup contact`}
+                    </Text>
+                  </Pressable>
+                );
+              }
+
+              return (
+                <View
+                  key={slot}
+                  style={{
+                    paddingVertical: 14,
+                    paddingHorizontal: 4,
+                    borderBottomWidth: 1,
+                    borderBottomColor: "#1a1a1a",
+                  }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                        <Text style={{ fontSize: 11, color: "#444" }}>{slotLabels[slot]}</Text>
+                        {renderConsentBadge(p.consentStatus)}
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 6 }}>
+                      {p.consentStatus === 'pending' ? (
+                        <Pressable
+                          onPress={() => handleResend(slot)}
+                          disabled={resendingSlot === slot}
+                          testID={`settings-resend-slot-${slot}`}
+                          style={({ pressed }) => ({
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: "#1a1400",
+                            borderWidth: 1,
+                            borderColor: "#3a3000",
+                            opacity: pressed || resendingSlot === slot ? 0.5 : 1,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, color: "#ffc800", fontWeight: "600" }}>
+                            {resendingSlot === slot ? "..." : "Resend"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={() => handleEditFromSettings(slot)}
+                        testID={`settings-edit-slot-${slot}`}
+                        style={({ pressed }) => ({
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: "#1a0000",
+                          borderWidth: 1,
+                          borderColor: "#330000",
+                          opacity: pressed ? 0.5 : 1,
+                        })}
+                      >
+                        <Text style={{ fontSize: 12, color: "#cc0000", fontWeight: "600" }}>Edit</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleRemoveFromSettings(slot)}
+                        testID={`settings-remove-slot-${slot}`}
+                        style={({ pressed }) => ({
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: "#161616",
+                          borderWidth: 1,
+                          borderColor: "#282828",
+                          opacity: pressed ? 0.5 : 1,
+                        })}
+                      >
+                        <Text style={{ fontSize: 12, color: "#666", fontWeight: "600" }}>Remove</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: "#1a1a1a", marginVertical: 8 }} />
+
+            {/* Sign Out */}
+            <Pressable
+              onPress={handleSignOut}
+              style={({ pressed }) => ({
+                paddingVertical: 18,
+                paddingHorizontal: 4,
+                borderBottomWidth: 1,
+                borderBottomColor: "#1a1a1a",
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 17, fontWeight: "600", color: "#cc0000" }}>
+                Sign Out
               </Text>
-            ) : null}
-          </Pressable>
+            </Pressable>
 
-          {/* Sign Out */}
-          <Pressable
-            onPress={handleSignOut}
-            style={({ pressed }) => ({
-              paddingVertical: 18,
-              paddingHorizontal: 4,
-              borderBottomWidth: 1,
-              borderBottomColor: "#1a1a1a",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "600", color: "#cc0000" }}>
-              Sign Out
-            </Text>
-          </Pressable>
-
-          {/* Close */}
-          <Pressable
-            onPress={handleCloseSettings}
-            style={({ pressed }) => ({
-              paddingVertical: 18,
-              paddingHorizontal: 4,
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "600", color: "#555" }}>
-              Close
-            </Text>
-          </Pressable>
+            {/* Close */}
+            <Pressable
+              onPress={handleCloseSettings}
+              style={({ pressed }) => ({
+                paddingVertical: 18,
+                paddingHorizontal: 4,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 17, fontWeight: "600", color: "#555" }}>
+                Close
+              </Text>
+            </Pressable>
+          </ScrollView>
         </Animated.View>
       </Modal>
 
@@ -1014,7 +1240,7 @@ export default function ReachScreen() {
               When you{" "}
               <Text style={{ color: "#cc0000", fontWeight: "900" }}>REACH</Text>
               ,{"\n"}
-              {person?.name ?? name} gets a video{"\n"}call request.
+              {persons[activeSlot - 1]?.name ?? name} gets a video{"\n"}call request.
             </Text>
             <Text style={{ fontSize: 18, fontWeight: "800", color: "#cc0000", textAlign: "center", marginTop: 16 }}>
               Instantly.
@@ -1043,7 +1269,7 @@ export default function ReachScreen() {
           ]}
         >
           <Text style={{ color: "#fff", fontSize: 17, fontWeight: "700" }}>
-            Reaching <Text style={{ color: "#cc0000" }}>{person?.name}</Text>
+            Reaching <Text style={{ color: "#cc0000" }}>{persons[0]?.name ?? "your person"}</Text>
           </Text>
           <Text style={{ color: "#444", fontSize: 13, marginTop: 5 }}>
             Video call started

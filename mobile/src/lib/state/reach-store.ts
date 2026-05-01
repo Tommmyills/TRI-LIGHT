@@ -2,19 +2,22 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-interface Person {
+export interface Person {
   id: string;
   name: string;
   phone: string;
   deviceId: string;
+  slot: number;
+  consentStatus?: 'confirmed' | 'pending' | 'declined' | 'none';
 }
 
 interface ReachStore {
-  person: Person | null;
-  deviceId: string;
+  persons: [Person | null, Person | null, Person | null];
+  deviceIds: [string, string, string];
   hasRegistered: boolean;
-  setPerson: (person: Person) => void;
-  setDeviceId: (id: string) => void;
+  setPerson: (person: Person, slot: 1 | 2 | 3) => void;
+  removePerson: (slot: 1 | 2 | 3) => void;
+  setDeviceId: (id: string, slot: 1 | 2 | 3) => void;
   setHasRegistered: (val: boolean) => void;
   reset: () => void;
 }
@@ -22,16 +25,32 @@ interface ReachStore {
 const useReachStore = create<ReachStore>()(
   persist(
     (set) => ({
-      person: null,
-      deviceId: "",
+      persons: [null, null, null],
+      deviceIds: ["", "", ""],
       hasRegistered: false,
-      setPerson: (person: Person) => set({ person, hasRegistered: true }),
-      setDeviceId: (id: string) => set({ deviceId: id }),
-      setHasRegistered: (val: boolean) => set({ hasRegistered: val }),
-      reset: () => set({ person: null, hasRegistered: false }),
+      setPerson: (person, slot) =>
+        set((state) => {
+          const persons = [...state.persons] as [Person | null, Person | null, Person | null];
+          persons[slot - 1] = person;
+          return { persons, hasRegistered: true };
+        }),
+      removePerson: (slot) =>
+        set((state) => {
+          const persons = [...state.persons] as [Person | null, Person | null, Person | null];
+          persons[slot - 1] = null;
+          return { persons };
+        }),
+      setDeviceId: (id, slot) =>
+        set((state) => {
+          const deviceIds = [...state.deviceIds] as [string, string, string];
+          deviceIds[slot - 1] = id;
+          return { deviceIds };
+        }),
+      setHasRegistered: (val) => set({ hasRegistered: val }),
+      reset: () => set({ persons: [null, null, null], hasRegistered: false }),
     }),
     {
-      name: "reach-storage",
+      name: "reach-storage-v2",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

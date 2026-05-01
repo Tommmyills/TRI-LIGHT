@@ -17,8 +17,8 @@ model User {
   updatedAt          DateTime            @updatedAt
   sessions           Session[]
   accounts           Account[]
-  person             Person?
-  consentInvitation  ConsentInvitation?
+  persons            Person[]
+  consentInvitations ConsentInvitation[]
 }
 
 model ConsentInvitation {
@@ -27,12 +27,15 @@ model ConsentInvitation {
   personPhone String
   personName  String
   senderName  String
-  userId      String    @unique
+  slot        Int       @default(1)
+  userId      String
   consentedAt DateTime?
   declinedAt  DateTime?
   createdAt   DateTime  @default(now())
 
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slot])
 }
 
 model Session {
@@ -78,10 +81,13 @@ model Person {
   name      String
   phone     String
   deviceId  String   @unique
-  userId    String?  @unique
+  slot      Int      @default(1)
+  userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([userId, slot])
 }
 
 model CallSession {

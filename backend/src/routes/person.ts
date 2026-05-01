@@ -46,131 +46,188 @@ async function sendInviteEmail(
   }
 }
 
-// Save or update a person (supports both deviceId and userId)
+// POST /api/person - Save or update a contact for a given slot (1, 2, or 3)
 personRouter.post("/", async (c) => {
   const body = await c.req.json();
-  const { name, phone, deviceId } = body;
+  const { name, phone, deviceId, slot: rawSlot } = body;
   const user = c.get("user");
 
   if (!name || !phone || !deviceId) {
     return c.json(
-      {
-        error: {
-          message: "Name, phone, and deviceId are required",
-          code: "VALIDATION_ERROR",
-        },
-      },
+      { error: { message: "Name, phone, and deviceId are required", code: "VALIDATION_ERROR" } },
+      400
+    );
+  }
+
+  const slot: number = Number(rawSlot) || 1;
+  if (slot < 1 || slot > 3) {
+    return c.json(
+      { error: { message: "Slot must be 1, 2, or 3", code: "VALIDATION_ERROR" } },
       400
     );
   }
 
   const userId = user?.id ?? null;
 
-  const person = await prisma.person.upsert({
-    where: { deviceId },
-    update: { name, phone, ...(userId ? { userId } : {}) },
-    create: { name, phone, deviceId, ...(userId ? { userId } : {}) },
-  });
+  let person;
+  if (userId) {
+    const existingBySlot = await prisma.person.findFirst({
+      where: { userId, slot },
+    });
 
-  // If user is logged in, upsert a ConsentInvitation and send invite SMS
+    if (existingBySlot) {
+      person = await prisma.person.update({
+        where: { id: existingBySlot.id },
+        data: { name, phone },
+      });
+    } else {
+      person = await prisma.person.upsert({
+        where: { deviceId },
+        update: { name, phone, userId, slot },
+        create: { name, phone, deviceId, userId, slot },
+      });
+    }
+  } else {
+    person = await prisma.person.upsert({
+      where: { deviceId },
+      update: { name, phone },
+      create: { name, phone, deviceId, slot },
+    });
+  }
+
+  // If logged in, manage ConsentInvitation for this slot
   if (userId && user) {
     const senderName = user.name;
 
-    // Check if there's an existing invitation with the same phone (no need to resend)
-    const existing = await prisma.consentInvitation.findUnique({
-      where: { userId },
+    const existingInv = await prisma.consentInvitation.findFirst({
+      where: { userId, slot },
     });
 
-    const phoneChanged = existing?.personPhone !== phone;
+    const phoneChanged = existingInv?.personPhone !== phone;
 
-    if (!existing) {
-      // Create new invitation
+    if (!existingInv) {
       const invitation = await prisma.consentInvitation.create({
-        data: {
-          personPhone: phone,
-          personName: name,
-          senderName,
-          userId,
-        },
+        data: { personPhone: phone, personName: name, senderName, userId, slot },
       });
-
-      // Send invite SMS
       try {
         await sendInviteEmail(phone, senderName, invitation.token);
       } catch (err) {
-        console.error("Error sending invite SMS:", err);
+        console.error("Error sending invite email:", err);
       }
     } else if (phoneChanged) {
-      // Phone changed - reset consent and send new invite
       const updated = await prisma.consentInvitation.update({
-        where: { userId },
-        data: {
-          personPhone: phone,
-          personName: name,
-          senderName,
-          consentedAt: null,
-          declinedAt: null,
-        },
+        where: { id: existingInv.id },
+        data: { personPhone: phone, personName: name, senderName, consentedAt: null, declinedAt: null },
       });
-
       try {
         await sendInviteEmail(phone, senderName, updated.token);
       } catch (err) {
-        console.error("Error sending invite SMS:", err);
+        console.error("Error sending invite email:", err);
       }
     } else {
-      // Same phone, just update the name/senderName fields silently
       await prisma.consentInvitation.update({
-        where: { userId },
-        data: {
-          personName: name,
-          senderName,
-        },
+        where: { id: existingInv.id },
+        data: { personName: name, senderName },
       });
     }
   }
 
-  return c.json({ data: person });
-});
-
-// Get person for logged-in user
-personRouter.get("/for-user", async (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ data: null });
-  }
-
-  const person = await prisma.person.findUnique({
-    where: { userId: user.id },
-  });
-
-  if (!person) {
-    return c.json({ data: null });
-  }
-
-  const invitation = await prisma.consentInvitation.findUnique({
-    where: { userId: user.id },
-  });
-
-  const consentStatus: "confirmed" | "declined" | "pending" | "none" =
-    invitation?.consentedAt
+  // Return person with consentStatus
+  let consentStatus: "confirmed" | "declined" | "pending" | "none" = "none";
+  if (userId) {
+    const inv = await prisma.consentInvitation.findFirst({
+      where: { userId, slot },
+    });
+    consentStatus = inv?.consentedAt
       ? "confirmed"
-      : invitation?.declinedAt
+      : inv?.declinedAt
         ? "declined"
-        : invitation
+        : inv
           ? "pending"
           : "none";
+  }
 
   return c.json({ data: { ...person, consentStatus } });
 });
 
-// Get person by deviceId (keep for backward compat)
-personRouter.get("/:deviceId", async (c) => {
-  const deviceId = c.req.param("deviceId");
-  const person = await prisma.person.findUnique({
-    where: { deviceId },
+// GET /api/person/for-user - Get all contacts for logged-in user (array)
+personRouter.get("/for-user", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ data: [] });
+  }
+
+  const persons = await prisma.person.findMany({
+    where: { userId: user.id },
+    orderBy: { slot: "asc" },
   });
 
+  const invitations = await prisma.consentInvitation.findMany({
+    where: { userId: user.id },
+  });
+
+  const result = persons.map((person) => {
+    const inv = invitations.find((i) => i.slot === person.slot);
+    const consentStatus: "confirmed" | "declined" | "pending" | "none" =
+      inv?.consentedAt ? "confirmed" : inv?.declinedAt ? "declined" : inv ? "pending" : "none";
+    return { ...person, consentStatus };
+  });
+
+  return c.json({ data: result });
+});
+
+// DELETE /api/person/slot/:slot - Remove a contact by slot
+personRouter.delete("/slot/:slot", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const slot = Number(c.req.param("slot"));
+  if (!slot || slot < 1 || slot > 3) {
+    return c.json({ error: { message: "Invalid slot", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  await prisma.consentInvitation.deleteMany({ where: { userId: user.id, slot } });
+  await prisma.person.deleteMany({ where: { userId: user.id, slot } });
+
+  return c.json({ data: { deleted: true } });
+});
+
+// POST /api/person/resend/:slot - Resend invite for a specific slot
+personRouter.post("/resend/:slot", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
+  }
+
+  const slot = Number(c.req.param("slot"));
+  if (!slot || slot < 1 || slot > 3) {
+    return c.json({ error: { message: "Invalid slot", code: "VALIDATION_ERROR" } }, 400);
+  }
+
+  const invitation = await prisma.consentInvitation.findFirst({
+    where: { userId: user.id, slot },
+  });
+
+  if (!invitation) {
+    return c.json({ error: { message: "No invitation found for this slot", code: "NOT_FOUND" } }, 404);
+  }
+
+  try {
+    await sendInviteEmail(invitation.personPhone, invitation.senderName, invitation.token);
+  } catch (err) {
+    console.error("Error resending invite:", err);
+    return c.json({ error: { message: "Failed to resend invite", code: "SEND_ERROR" } }, 500);
+  }
+
+  return c.json({ data: { sent: true } });
+});
+
+// GET /api/person/:deviceId - backward compat
+personRouter.get("/:deviceId", async (c) => {
+  const deviceId = c.req.param("deviceId");
+  const person = await prisma.person.findUnique({ where: { deviceId } });
   return c.json({ data: person ?? null });
 });
 

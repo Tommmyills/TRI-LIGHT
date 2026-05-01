@@ -53,34 +53,43 @@ reachRouter.post("/", async (c) => {
     return c.json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } }, 401);
   }
 
-  // Get the saved person for this user
-  const person = await prisma.person.findUnique({
+  // Get all persons for this user ordered by slot
+  const persons = await prisma.person.findMany({
     where: { userId: user.id },
+    orderBy: { slot: "asc" },
   });
 
-  if (!person) {
+  if (persons.length === 0) {
     return c.json({ error: { message: "No person saved", code: "NO_PERSON" } }, 404);
   }
 
-  // Check consent before sending any SMS
-  const invitation = await prisma.consentInvitation.findUnique({
+  // Get all invitations
+  const invitations = await prisma.consentInvitation.findMany({
     where: { userId: user.id },
   });
 
-  if (!invitation?.consentedAt) {
-    // Resend invite email so the accountability person gets another chance to accept
-    if (invitation && env.RESEND_API_KEY) {
-      try {
-        await sendInviteEmail(invitation.personPhone, invitation.senderName, invitation.token);
-      } catch (err) {
-        console.error("Error resending invite email:", err);
+  // Find confirmed contacts
+  const confirmedContacts = persons.filter((p) => {
+    const inv = invitations.find((i) => i.slot === p.slot);
+    return inv?.consentedAt != null;
+  });
+
+  if (confirmedContacts.length === 0) {
+    // Resend invites to all pending contacts
+    for (const person of persons) {
+      const inv = invitations.find((i) => i.slot === person.slot);
+      if (inv && !inv.consentedAt && !inv.declinedAt && env.RESEND_API_KEY) {
+        try {
+          await sendInviteEmail(inv.personPhone, inv.senderName, inv.token);
+        } catch (err) {
+          console.error("Error resending invite:", err);
+        }
       }
     }
     return c.json(
       {
         error: {
-          message:
-            "Waiting for your accountability person to accept the invitation. We've resent the invite.",
+          message: "Waiting for your accountability person to accept the invitation. We've resent the invite.",
           code: "CONSENT_PENDING",
         },
       },
@@ -88,10 +97,13 @@ reachRouter.post("/", async (c) => {
     );
   }
 
+  // Use first confirmed contact as primary (for CallSession record)
+  const primaryContact = confirmedContacts[0]!;
+
   let videoRoomUrl: string | null = null;
   let roomName: string = `reach-${Date.now()}`;
 
-  // Create Daily.co room
+  // Create ONE Daily.co room
   if (env.DAILY_API_KEY) {
     try {
       const dailyRes = await fetch("https://api.daily.co/v1/rooms", {
@@ -104,7 +116,7 @@ reachRouter.post("/", async (c) => {
           name: roomName,
           properties: {
             enable_knocking: false,
-            exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour expiry
+            exp: Math.floor(Date.now() / 1000) + 3600,
           },
         }),
       });
@@ -112,34 +124,33 @@ reachRouter.post("/", async (c) => {
       if (dailyRes.ok) {
         const dailyData = await dailyRes.json() as { url?: string; name?: string };
         videoRoomUrl = dailyData.url || null;
-        if (dailyData.name) {
-          roomName = dailyData.name;
-        }
+        if (dailyData.name) roomName = dailyData.name;
       }
     } catch (err) {
       console.error("Daily.co error:", err);
     }
   }
 
-  // Save CallSession to DB
+  // Save CallSession
   const callSession = await prisma.callSession.create({
     data: {
       callerId: user.id,
       callerName: user.name,
-      recipientPhone: person.phone,
+      recipientPhone: primaryContact.phone,
       roomUrl: videoRoomUrl || "",
-      roomName: roomName,
+      roomName,
       status: "pending",
     },
   });
 
-  // Send Resend email with Daily.co browser link (no app required for recipient)
+  // Send email to ALL confirmed contacts
   let smsSent = false;
-  console.log("Resend check - API key present:", !!env.RESEND_API_KEY, "Phone/email:", !!person.phone);
-  if (env.RESEND_API_KEY && person.phone) {
-    try {
-      const emailHtml = videoRoomUrl
-        ? `
+  if (env.RESEND_API_KEY) {
+    for (const contact of confirmedContacts) {
+      console.log("Resend check - API key present:", !!env.RESEND_API_KEY, "Phone/email:", !!contact.phone);
+      try {
+        const emailHtml = videoRoomUrl
+          ? `
 <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;min-height:100vh;padding:40px 20px;text-align:center;">
   <div style="max-width:480px;margin:0 auto;background:#1a1a1a;border-radius:20px;padding:40px 32px;">
     <div style="font-size:13px;font-weight:700;letter-spacing:3px;color:#888;margin-bottom:24px;">TRI-LIGHT APP</div>
@@ -150,44 +161,41 @@ reachRouter.post("/", async (c) => {
     <p style="color:#555;font-size:12px;word-break:break-all;">${videoRoomUrl}</p>
   </div>
 </div>`
-        : `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;min-height:100vh;padding:40px 20px;text-align:center;"><div style="max-width:480px;margin:0 auto;background:#1a1a1a;border-radius:20px;padding:40px 32px;"><div style="font-size:13px;font-weight:700;letter-spacing:3px;color:#888;margin-bottom:24px;">TRI-LIGHT APP</div><h1 style="color:#fff;font-size:24px;font-weight:800;margin:0 0 12px;">${user.name} is reaching out</h1><p style="color:#aaa;font-size:16px;line-height:1.6;margin:0;">They want to connect with you. Please reach back as soon as you can.</p></div></div>`;
+          : `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0a0a0a;min-height:100vh;padding:40px 20px;text-align:center;"><div style="max-width:480px;margin:0 auto;background:#1a1a1a;border-radius:20px;padding:40px 32px;"><div style="font-size:13px;font-weight:700;letter-spacing:3px;color:#888;margin-bottom:24px;">TRI-LIGHT APP</div><h1 style="color:#fff;font-size:24px;font-weight:800;margin:0 0 12px;">${user.name} is reaching out</h1><p style="color:#aaa;font-size:16px;line-height:1.6;margin:0;">They want to connect with you. Please reach back as soon as you can.</p></div></div>`;
 
-      const emailSubject = videoRoomUrl
-        ? `${user.name} is reaching out — join the video call`
-        : `${user.name} is reaching out to you`;
+        const emailSubject = videoRoomUrl
+          ? `${user.name} is reaching out — join the video call`
+          : `${user.name} is reaching out to you`;
 
-      const reachRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: "TRI-LIGHT <support@updates.trilightapp.com>",
-          to: [person.phone],
-          subject: emailSubject,
-          html: emailHtml,
-        }),
-      });
+        const reachRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "TRI-LIGHT <support@updates.trilightapp.com>",
+            to: [contact.phone],
+            subject: emailSubject,
+            html: emailHtml,
+          }),
+        });
 
-      if (reachRes.ok) {
-        smsSent = true;
-        console.log("Resend email sent successfully to:", person.phone);
-      } else {
-        const errData = await reachRes.text();
-        console.error("Resend email FAILED:", reachRes.status, errData);
+        if (reachRes.ok) {
+          smsSent = true;
+          console.log("Resend email sent successfully to:", contact.phone);
+        } else {
+          const errData = await reachRes.text();
+          console.error("Resend email FAILED:", reachRes.status, errData);
+        }
+      } catch (err) {
+        console.error("Resend email error:", err);
       }
-    } catch (err) {
-      console.error("Resend email error:", err);
     }
   }
 
   return c.json({
-    data: {
-      videoRoomUrl,
-      sessionId: callSession.id,
-      smsSent,
-    },
+    data: { videoRoomUrl, sessionId: callSession.id, smsSent },
   });
 });
 
